@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>🏎️🌈🏆</title>
+  <link rel="icon" type="image/jpeg" href="icons/dogday.jpg" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div id="kartApp">
+    <!-- Fullscreen 3D Three.js WebGL Viewport -->
+    <canvas id="webglCanvas"></canvas>
+
+    <!-- Top Floating 3D Race Progress & Star HUD (100% Zero Text) -->
+    <header class="race-topbar">
+      <!-- Active Driver & Cup Badge -->
+      <div class="driver-chip">
+        <img id="hudDriverImg" src="icons/dogday.jpg" alt="" />
+        <span id="hudCupEmoji" class="cup-badge">☀️</span>
+      </div>
+
+      <!-- 3D Highway Race Progress Gauge -->
+      <div class="track-progress-shell">
+        <div class="track-progress-rail">
+          <div id="trackProgressFill" class="track-progress-fill"></div>
+          <span class="track-checkpoint cp-1" id="cpStar0">⭐</span>
+          <span class="track-checkpoint cp-2" id="cpStar1">⭐</span>
+          <span class="track-checkpoint cp-3" id="cpStar2">⭐</span>
+          <span class="track-finish-flag">🏁</span>
+          <!-- Rival Markers -->
+          <div id="rivalMarker0" class="kart-marker rival-marker">
+            <img id="rivalMarkerImg0" src="icons/catnap.jpg" alt="" />
+          </div>
+          <div id="rivalMarker1" class="kart-marker rival-marker">
+            <img id="rivalMarkerImg1" src="icons/craftycorn.jpg" alt="" />
+          </div>
+          <!-- Player Marker -->
+          <div id="playerMarker" class="kart-marker player-marker">
+            <img id="playerMarkerImg" src="icons/dogday.jpg" alt="" />
+            <span class="marker-crown">🏎️</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3 Giant Collected Star Trophies + Sound + Replay -->
+      <div class="top-right-cluster">
+        <div class="star-trophy-row">
+          <div id="hudStar0" class="star-medal">⭐</div>
+          <div id="hudStar1" class="star-medal">⭐</div>
+          <div id="hudStar2" class="star-medal">⭐</div>
+        </div>
+        <button id="btnRestartRace" class="glass-icon-btn" aria-label="Replay">🔁</button>
+        <button id="btnSoundToggle" class="glass-icon-btn" aria-label="Sound">🔊</button>
+      </div>
+    </header>
+
+    <!-- Left Floating Vertical 8-Critter 3D World & Kart Selector (100% Zero Text) -->
+    <aside id="worldSelectorRail" class="world-selector-rail"></aside>
+
+    <!-- Center Floating Visual Toast & Animated Finger Guide (100% Zero Text) -->
+    <div id="raceToast" class="race-toast hidden">🍄🔥✨</div>
+    <div id="steerGuide" class="steer-guide">⬅️ 👆 ➡️</div>
+
+    <!-- Bottom Arcade 3D Kart Pedals (100% Zero Text) -->
+    <footer class="arcade-cockpit">
+      <!-- Bottom-Left: Steering & Glider Wing Jump Pedals -->
+      <div class="pedal-cluster left-pedals">
+        <button id="btnLaneLeft" class="arcade-pedal steer-pedal" aria-label="Left">⬅️</button>
+        <button id="btnJumpGlide" class="arcade-pedal jump-pedal" aria-label="Glide">🪽</button>
+        <button id="btnLaneRight" class="arcade-pedal steer-pedal" aria-label="Right">➡️</button>
+      </div>
+
+      <!-- Bottom-Right: Mario-Kart 3D Item Power-Up Pedals -->
+      <div class="pedal-cluster right-pedals">
+        <button id="btnItemTurbo" class="arcade-pedal item-turbo" aria-label="Turbo">🍄</button>
+        <button id="btnItemShell" class="arcade-pedal item-shell" aria-label="Shell">🐢</button>
+        <button id="btnItemMagnet" class="arcade-pedal item-magnet" aria-label="Magnet">🧲</button>
+      </div>
+    </footer>
+
+    <!-- 100% Zero-Text 3D Podium Trophy Celebration Modal -->
+    <div id="winModal" class="podium-backdrop hidden" role="dialog" aria-modal="true">
+      <div class="podium-card">
+        <div class="podium-sparkles">🏁 🏆 🌈 🏆 🏁</div>
+        <div class="podium-hero">
+          <img id="winDriverImg" src="icons/dogday.jpg" alt="" />
+          <span id="winCupBadge" class="podium-cup-badge">☀️</span>
+          <span class="podium-medal-badge">🥇</span>
+        </div>
+        <div class="podium-stars" id="winStarsRow">
+          <div class="podium-star earned">⭐</div>
+          <div class="podium-star earned">⭐</div>
+          <div class="podium-star earned">⭐</div>
+        </div>
+        <div class="podium-actions">
+          <button id="btnWinReplay" class="podium-btn replay">🔁</button>
+          <button id="btnWinNext" class="podium-btn next">▶️</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 100% Zero-Text All-8 Cups Grand Prix Champion Modal -->
+    <div id="finaleModal" class="podium-backdrop hidden" role="dialog" aria-modal="true">
+      <div class="podium-card finale-card">
+        <div class="podium-sparkles">🌈 🏆 🏎️ 👑 🏎️ 🏆 🌈</div>
+        <div id="finaleGrid" class="finale-grid"></div>
+        <div class="podium-actions">
+          <button id="btnFinaleClose" class="podium-btn next">🎉</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/vendor/three.min.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
