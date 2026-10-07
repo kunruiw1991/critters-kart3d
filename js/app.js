@@ -1,6 +1,12 @@
 /**
  * Critter Kart 3D: Rainbow Grand Prix! (Three.js 3D WebGL Engine)
- * 100% Zero-Text 3D Kart Racing, Gliding & Star Dash starring all 8 Smiling Critters!
+ * Upgraded with Visceral 3D Crash & Impact Physics:
+ * - Hit-Stop Micro-Freeze + 3D Camera Trauma Shake, FOV Punch & Dutch-Roll Jolt
+ * - 3D Shockwave Rings, Starburst Cores, Grinding Metal Sparks & Engine Smoke
+ * - 14-Piece 3D Shattering Crate/Barrel Debris with Road Bounce Restitution
+ * - True 3D Kart-vs-Kart Sideswipe Door-Bangs & Airborne Flip Takedowns
+ * - 3D Chassis Squash-and-Stretch, Nose Pitch Bucking & Spinning 3D Dizzy Stars Halo
+ * - Multi-Layered Web Audio Sub-Bass + Filtered Noise Crunch + Tire Screech Synthesizer
  */
 
 /* global THREE */
@@ -18,7 +24,7 @@ const CRITTERS = [
     groundColor: 0x66bb6a,
     roadColor: 0x37474f,
     treeColor: 0x43a047,
-    trackLength: 340
+    trackLength: 360
   },
   {
     id: 'catnap',
@@ -32,7 +38,7 @@ const CRITTERS = [
     groundColor: 0x311b92,
     roadColor: 0x261c3d,
     treeColor: 0x9575cd,
-    trackLength: 360
+    trackLength: 380
   },
   {
     id: 'craftycorn',
@@ -46,7 +52,7 @@ const CRITTERS = [
     groundColor: 0xf48fb1,
     roadColor: 0x455a64,
     treeColor: 0xba68c8,
-    trackLength: 380
+    trackLength: 400
   },
   {
     id: 'hoppy',
@@ -60,7 +66,7 @@ const CRITTERS = [
     groundColor: 0x2e7d32,
     roadColor: 0x334148,
     treeColor: 0x00e676,
-    trackLength: 400
+    trackLength: 420
   },
   {
     id: 'pickypiggy',
@@ -74,7 +80,7 @@ const CRITTERS = [
     groundColor: 0xff80ab,
     roadColor: 0x4a2c3d,
     treeColor: 0xff4081,
-    trackLength: 420
+    trackLength: 440
   },
   {
     id: 'bubba',
@@ -88,7 +94,7 @@ const CRITTERS = [
     groundColor: 0xe1f5fe,
     roadColor: 0x37474f,
     treeColor: 0x4dd0e1,
-    trackLength: 440
+    trackLength: 460
   },
   {
     id: 'bobby',
@@ -102,7 +108,7 @@ const CRITTERS = [
     groundColor: 0xc62828,
     roadColor: 0x3e2723,
     treeColor: 0xff5252,
-    trackLength: 460
+    trackLength: 480
   },
   {
     id: 'kickinchicken',
@@ -116,16 +122,17 @@ const CRITTERS = [
     groundColor: 0xe65100,
     roadColor: 0x2e241f,
     treeColor: 0xff9100,
-    trackLength: 480
+    trackLength: 500
   }
 ];
 
 const LANES = [-5.6, -2.8, 0, 2.8, 5.6];
 const RAINBOW_HEX = [0xff5252, 0xffb300, 0xffd54f, 0x69f0ae, 0x29b6f6, 0xab47bc];
 
-// Sound Synthesizer
+// Multi-Layered Web Audio Synthesizer (Sub-Bass + Noise Crunch + Tire Skid)
 let soundEnabled = true;
 let audioCtx = null;
+let noiseBuffer = null;
 
 function ensureAudio() {
   if (!soundEnabled) return null;
@@ -135,6 +142,14 @@ function ensureAudio() {
   }
   if (audioCtx && audioCtx.state === 'suspended') {
     audioCtx.resume().catch(() => {});
+  }
+  if (audioCtx && !noiseBuffer) {
+    const sampleRate = audioCtx.sampleRate;
+    noiseBuffer = audioCtx.createBuffer(1, sampleRate * 0.6, sampleRate);
+    const data = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < data.length; i++) {
+      data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (sampleRate * 0.22));
+    }
   }
   return audioCtx;
 }
@@ -148,7 +163,7 @@ function playTone(freq, type = 'sine', duration = 0.14, gainVal = 0.13, slideTo 
     osc.type = type;
     osc.frequency.setValueAtTime(freq, actx.currentTime);
     if (slideTo) {
-      osc.frequency.exponentialRampToValueAtTime(slideTo, actx.currentTime + duration);
+      osc.frequency.exponentialRampToValueAtTime(Math.max(18, slideTo), actx.currentTime + duration);
     }
     gain.gain.setValueAtTime(gainVal, actx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.001, actx.currentTime + duration);
@@ -159,8 +174,57 @@ function playTone(freq, type = 'sine', duration = 0.14, gainVal = 0.13, slideTo 
   } catch (_) {}
 }
 
+function playNoiseCrunch(filterType = 'bandpass', startFreq = 900, endFreq = 180, duration = 0.26, gainVal = 0.36) {
+  const actx = ensureAudio();
+  if (!actx || !noiseBuffer) return;
+  try {
+    const src = actx.createBufferSource();
+    src.buffer = noiseBuffer;
+    const filter = actx.createBiquadFilter();
+    filter.type = filterType;
+    filter.frequency.setValueAtTime(startFreq, actx.currentTime);
+    filter.frequency.exponentialRampToValueAtTime(Math.max(40, endFreq), actx.currentTime + duration);
+    filter.Q.setValueAtTime(1.8, actx.currentTime);
+
+    const gain = actx.createGain();
+    gain.gain.setValueAtTime(gainVal, actx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, actx.currentTime + duration);
+
+    src.connect(filter);
+    filter.connect(gain);
+    gain.connect(actx.destination);
+    src.start();
+    src.stop(actx.currentTime + duration);
+  } catch (_) {}
+}
+
+// Heavy Obstacle Crash Sound: Sub-Bass Thud + Wood/Metal Noise Crunch + Tire Skid Screech
+function playHeavyCrashSfx() {
+  playTone(145, 'triangle', 0.34, 0.44, 24);
+  playTone(95, 'sawtooth', 0.28, 0.28, 28);
+  playTone(215, 'square', 0.19, 0.2, 52);
+  playNoiseCrunch('lowpass', 1650, 140, 0.3, 0.42);
+  // Tire screech chirp + dizzy star warble
+  setTimeout(() => playTone(1480, 'sine', 0.16, 0.11, 820), 35);
+  setTimeout(() => playTone(520, 'triangle', 0.14, 0.12, 340), 120);
+}
+
+// Explosive Turbo / Shell Smash Sound: Sonic Boom + Wood/Crystal Shatter
+function playSmashShatterSfx() {
+  playTone(170, 'triangle', 0.28, 0.4, 30);
+  playTone(320, 'sawtooth', 0.18, 0.22, 680);
+  playNoiseCrunch('bandpass', 1900, 320, 0.24, 0.38);
+}
+
+// Kart-vs-Kart Bumper-Car Sideswipe Sound: Mid-Bass Bump + Metal Grinding Sparks
+function playKartSideswipeSfx() {
+  playTone(160, 'triangle', 0.22, 0.36, 38);
+  playTone(280, 'sawtooth', 0.14, 0.2, 110);
+  playNoiseCrunch('bandpass', 2400, 600, 0.2, 0.32);
+}
+
 function playSteerSfx() {
-  playTone(340, 'sine', 0.09, 0.1, 480);
+  playTone(340, 'sine', 0.08, 0.09, 490);
 }
 
 function playJumpSfx() {
@@ -230,26 +294,25 @@ scene.add(dirLight);
 const textureLoader = new THREE.TextureLoader();
 const critterTextures = {};
 CRITTERS.forEach((c) => {
-  const tex = textureLoader.load(c.icon);
-  critterTextures[c.id] = tex;
+  critterTextures[c.id] = textureLoader.load(c.icon);
 });
 
-// World Group Containers
 const worldGroup = new THREE.Group();
 scene.add(worldGroup);
 
 const dynamicGroup = new THREE.Group();
 scene.add(dynamicGroup);
 
-// Build a 3D Sculpted Smiling Critter Kart
+// Build a 3D Sculpted Smiling Critter Kart (with Chassis deformation group & 3D Dizzy Stars Halo!)
 function createKartMesh(critterCfg, isPlayer = false) {
   const root = new THREE.Group();
+  const deformGroup = new THREE.Group();
+  root.add(deformGroup);
 
-  // Kart main aerodynamic chassis
   const bodyMat = new THREE.MeshStandardMaterial({
     color: critterCfg.bodyColor,
-    roughness: 0.28,
-    metalness: 0.15
+    roughness: 0.26,
+    metalness: 0.16
   });
   const trimMat = new THREE.MeshStandardMaterial({
     color: critterCfg.trimColor,
@@ -258,38 +321,44 @@ function createKartMesh(critterCfg, isPlayer = false) {
   });
   const darkMat = new THREE.MeshStandardMaterial({
     color: 0x212121,
-    roughness: 0.6
+    roughness: 0.55
+  });
+  const bumperMat = new THREE.MeshStandardMaterial({
+    color: 0xffd54f,
+    metalness: 0.65,
+    roughness: 0.2
   });
 
-  const chassis = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.52, 2.75), bodyMat);
+  const chassis = new THREE.Mesh(new THREE.BoxGeometry(1.78, 0.52, 2.75), bodyMat);
   chassis.position.y = 0.52;
   chassis.castShadow = true;
-  root.add(chassis);
+  deformGroup.add(chassis);
 
-  // Sloped front nose hood
-  const nose = new THREE.Mesh(new THREE.BoxGeometry(1.45, 0.38, 1.05), trimMat);
+  // Heavy Chrome Front & Rear Impact Bumpers
+  const frontBumper = new THREE.Mesh(new THREE.BoxGeometry(1.92, 0.24, 0.26), bumperMat);
+  frontBumper.position.set(0, 0.38, -2.08);
+  deformGroup.add(frontBumper);
+
+  const nose = new THREE.Mesh(new THREE.BoxGeometry(1.48, 0.38, 1.05), trimMat);
   nose.position.set(0, 0.5, -1.55);
   nose.castShadow = true;
-  root.add(nose);
+  deformGroup.add(nose);
 
-  // Side racing pods
   [-0.98, 0.98].forEach((sx) => {
-    const pod = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.4, 1.85), trimMat);
+    const pod = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.42, 1.88), trimMat);
     pod.position.set(sx, 0.46, -0.05);
     pod.castShadow = true;
-    root.add(pod);
+    deformGroup.add(pod);
   });
 
-  // Rear Spoiler Wing
   const wingStrutL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.55, 0.18), darkMat);
   wingStrutL.position.set(-0.55, 0.95, 1.2);
   const wingStrutR = wingStrutL.clone();
   wingStrutR.position.x = 0.55;
-  const spoiler = new THREE.Mesh(new THREE.BoxGeometry(1.85, 0.12, 0.48), trimMat);
+  const spoiler = new THREE.Mesh(new THREE.BoxGeometry(1.88, 0.12, 0.48), trimMat);
   spoiler.position.set(0, 1.22, 1.25);
-  root.add(wingStrutL, wingStrutR, spoiler);
+  deformGroup.add(wingStrutL, wingStrutR, spoiler);
 
-  // Twin Chrome Exhaust Pipes + Turbo Flame Cones
   const pipeMat = new THREE.MeshStandardMaterial({ color: 0xeceff1, metalness: 0.7, roughness: 0.2 });
   const flameMat = new THREE.MeshBasicMaterial({ color: 0xff6d00 });
   const flames = [];
@@ -297,40 +366,38 @@ function createKartMesh(critterCfg, isPlayer = false) {
     const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.18, 0.55, 12), pipeMat);
     pipe.rotation.x = Math.PI / 2.3;
     pipe.position.set(px, 0.68, 1.45);
-    root.add(pipe);
+    deformGroup.add(pipe);
 
-    const flame = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.95, 10), flameMat);
+    const flame = new THREE.Mesh(new THREE.ConeGeometry(0.24, 1.05, 10), flameMat);
     flame.rotation.x = Math.PI / 2;
-    flame.position.set(px, 0.68, 2.05);
+    flame.position.set(px, 0.68, 2.08);
     flame.visible = false;
-    root.add(flame);
+    deformGroup.add(flame);
     flames.push(flame);
   });
 
-  // 4 Spinning Racing Wheels
   const wheels = [];
-  const wheelGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.36, 16);
+  const wheelGeo = new THREE.CylinderGeometry(0.43, 0.43, 0.38, 16);
   wheelGeo.rotateZ(Math.PI / 2);
-  const hubGeo = new THREE.CylinderGeometry(0.22, 0.22, 0.38, 12);
+  const hubGeo = new THREE.CylinderGeometry(0.22, 0.22, 0.4, 12);
   hubGeo.rotateZ(Math.PI / 2);
-  const hubMat = new THREE.MeshStandardMaterial({ color: 0xffd54f, metalness: 0.5, roughness: 0.3 });
 
   [
-    [-1.06, 0.42, -1.05],
-    [1.06, 0.42, -1.05],
-    [-1.06, 0.42, 0.95],
-    [1.06, 0.42, 0.95]
+    [-1.08, 0.42, -1.05],
+    [1.08, 0.42, -1.05],
+    [-1.08, 0.42, 0.95],
+    [1.08, 0.42, 0.95]
   ].forEach(([wx, wy, wz]) => {
     const wGroup = new THREE.Group();
     wGroup.position.set(wx, wy, wz);
     const tire = new THREE.Mesh(wheelGeo, darkMat);
-    const hub = new THREE.Mesh(hubGeo, hubMat);
+    const hub = new THREE.Mesh(hubGeo, bumperMat);
     wGroup.add(tire, hub);
-    root.add(wGroup);
+    deformGroup.add(wGroup);
     wheels.push(wGroup);
   });
 
-  // Sculpted 3D Smiling Critter Driver Head + Ears + Portrait Emblem
+  // Sculpted 3D Smiling Critter Driver Head + Species Ears
   const driverGroup = new THREE.Group();
   driverGroup.position.set(0, 1.28, -0.05);
 
@@ -338,7 +405,6 @@ function createKartMesh(critterCfg, isPlayer = false) {
   headMesh.castShadow = true;
   driverGroup.add(headMesh);
 
-  // Sculpted 3D Ears based on Critter species
   if (critterCfg.earStyle === 'dog') {
     [-0.56, 0.56].forEach((ex) => {
       const ear = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.58, 0.32), trimMat);
@@ -354,10 +420,7 @@ function createKartMesh(critterCfg, isPlayer = false) {
       driverGroup.add(ear);
     });
   } else if (critterCfg.earStyle === 'unicorn') {
-    const horn = new THREE.Mesh(
-      new THREE.ConeGeometry(0.15, 0.65, 12),
-      new THREE.MeshStandardMaterial({ color: 0xffd54f, metalness: 0.4, roughness: 0.2 })
-    );
+    const horn = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.65, 12), bumperMat);
     horn.position.set(0, 0.78, -0.15);
     driverGroup.add(horn);
   } else if (critterCfg.earStyle === 'bunny') {
@@ -388,7 +451,6 @@ function createKartMesh(critterCfg, isPlayer = false) {
     });
   }
 
-  // Circular Portrait Medallion on Back of Driver Helmet & Front Hood
   const tex = critterTextures[critterCfg.id];
   const badgeMat = new THREE.MeshBasicMaterial({ map: tex });
   const backBadge = new THREE.Mesh(new THREE.CircleGeometry(0.46, 24), badgeMat);
@@ -399,11 +461,25 @@ function createKartMesh(critterCfg, isPlayer = false) {
   hoodBadge.rotation.x = -Math.PI / 2.2;
   hoodBadge.rotation.z = Math.PI;
   hoodBadge.position.set(0, 0.72, -1.52);
-  root.add(hoodBadge);
+  deformGroup.add(hoodBadge);
 
-  root.add(driverGroup);
+  // 3D Orbiting Dizzy Stars Halo (visible when crashed/spun out!)
+  const dizzyHalo = new THREE.Group();
+  dizzyHalo.position.set(0, 0.92, 0);
+  const dizzyStarGeo = new THREE.OctahedronGeometry(0.22, 0);
+  const dizzyStarMat = new THREE.MeshBasicMaterial({ color: 0xffea00 });
+  for (let i = 0; i < 4; i++) {
+    const ang = (i * Math.PI) / 2;
+    const st = new THREE.Mesh(dizzyStarGeo, dizzyStarMat);
+    st.position.set(Math.cos(ang) * 0.78, 0, Math.sin(ang) * 0.78);
+    dizzyHalo.add(st);
+  }
+  dizzyHalo.visible = false;
+  driverGroup.add(dizzyHalo);
 
-  // Deployable 3D Rainbow Glider Wings (for Jump / Glider Mode)
+  deformGroup.add(driverGroup);
+
+  // Deployable 3D Rainbow Glider Wings
   const gliderWings = new THREE.Group();
   gliderWings.position.set(0, 0.88, 0.1);
   [-1, 1].forEach((side) => {
@@ -419,32 +495,33 @@ function createKartMesh(critterCfg, isPlayer = false) {
   });
   gliderWings.scale.set(0.001, 1, 1);
   gliderWings.visible = false;
-  root.add(gliderWings);
+  deformGroup.add(gliderWings);
 
-  // 3D Star Magnet Aura Ring
   let magnetRing = null;
   if (isPlayer) {
     magnetRing = new THREE.Mesh(
-      new THREE.TorusGeometry(1.65, 0.09, 12, 36),
+      new THREE.TorusGeometry(1.68, 0.09, 12, 36),
       new THREE.MeshBasicMaterial({ color: 0xe040fb })
     );
     magnetRing.rotation.x = Math.PI / 2;
     magnetRing.position.y = 0.65;
     magnetRing.visible = false;
-    root.add(magnetRing);
+    deformGroup.add(magnetRing);
   }
 
   return {
     root,
+    deformGroup,
     wheels,
     flames,
     driverGroup,
+    dizzyHalo,
     gliderWings,
     magnetRing
   };
 }
 
-// Player & Track State
+// Player, Camera Trauma & Collision Physics State
 let playerKart = null;
 let playerState = {
   laneIndex: 2,
@@ -452,14 +529,29 @@ let playerState = {
   y: 0,
   vy: 0,
   z: 0,
-  speed: 24,
+  speed: 25,
+  knockVx: 0,
+  knockVz: 0,
   roll: 0,
+  pitchKick: 0,
   spinAngle: 0,
+  squash: 0,
+  dizzyTimer: 0,
   gliding: false,
   turboTimer: 0,
   magnetTimer: 0,
-  hitCooldown: 0
+  hitCooldown: 0,
+  smokeTick: 0
 };
+
+let camTrauma = {
+  shake: 0,
+  rollKick: 0,
+  pitchKick: 0,
+  fovKick: 0
+};
+
+let hitStopTimer = 0;
 
 let rivals = [];
 let trackStars = [];
@@ -468,6 +560,8 @@ let boostPads = [];
 let obstacles = [];
 let activeShells = [];
 let particles3D = [];
+let debrisChunks = [];
+let shockwaves3D = [];
 
 let checkpointStarsEarned = [false, false, false];
 let raceFinished = false;
@@ -480,7 +574,27 @@ function showRaceToast(emojiText) {
   el.textContent = emojiText;
   el.classList.remove('hidden');
   clearTimeout(showRaceToast._t);
-  showRaceToast._t = setTimeout(() => el.classList.add('hidden'), 1250);
+  showRaceToast._t = setTimeout(() => el.classList.add('hidden'), 1200);
+}
+
+function triggerImpactScreenEffect(mode = 'crash-hard', badgeEmoji = '💥') {
+  const overlay = document.getElementById('impactFlashOverlay');
+  const badge = document.getElementById('impactBadgeBurst');
+  if (overlay) {
+    overlay.className = `impact-flash-overlay ${mode}`;
+    clearTimeout(triggerImpactScreenEffect._ft);
+    triggerImpactScreenEffect._ft = setTimeout(() => {
+      overlay.className = 'impact-flash-overlay';
+    }, 170);
+  }
+  if (badge && badgeEmoji) {
+    badge.textContent = badgeEmoji;
+    badge.classList.remove('hidden');
+    clearTimeout(triggerImpactScreenEffect._bt);
+    triggerImpactScreenEffect._bt = setTimeout(() => {
+      badge.classList.add('hidden');
+    }, 340);
+  }
 }
 
 function hideSteerGuide() {
@@ -492,8 +606,147 @@ function hideSteerGuide() {
 
 function clearGroup(group) {
   while (group.children.length > 0) {
-    const child = group.children[0];
-    group.remove(child);
+    group.remove(group.children[0]);
+  }
+}
+
+// 3D Shockwave Ring + Starburst Core at Exact Impact Point
+function spawnShockwave3D(x, y, z, hexColor = 0xffea00, maxScale = 4.8) {
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(0.65, 0.14, 12, 28),
+    new THREE.MeshBasicMaterial({ color: hexColor, transparent: true, opacity: 0.95 })
+  );
+  ring.position.set(x, y, z);
+  ring.rotation.x = Math.PI / 2;
+
+  const core = new THREE.Mesh(
+    new THREE.OctahedronGeometry(0.75, 1),
+    new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: 0.9 })
+  );
+  core.position.set(x, y, z);
+
+  dynamicGroup.add(ring, core);
+  shockwaves3D.push({
+    ring,
+    core,
+    scale: 0.3,
+    maxScale,
+    life: 0.28,
+    maxLife: 0.28
+  });
+}
+
+// High-Velocity 3D Metal Grinding Sparks (Bounce on Road!)
+function spawnMetalSparks3D(x, y, z, count = 18) {
+  const sparkGeo = new THREE.BoxGeometry(0.12, 0.12, 0.55);
+  const colors = [0xffffff, 0xffea00, 0xff9100, 0xff3d00];
+  for (let i = 0; i < count; i++) {
+    const mat = new THREE.MeshBasicMaterial({ color: colors[i % colors.length] });
+    const m = new THREE.Mesh(sparkGeo, mat);
+    m.position.set(x, y, z);
+    const ang = Math.random() * Math.PI * 2;
+    const spd = 7 + Math.random() * 14;
+    const vy = 4 + Math.random() * 10;
+    m.rotation.y = ang;
+    dynamicGroup.add(m);
+    particles3D.push({
+      mesh: m,
+      vx: Math.cos(ang) * spd,
+      vy,
+      vz: Math.sin(ang) * spd,
+      gravity: 28,
+      bounce: true,
+      life: 0.65 + Math.random() * 0.25
+    });
+  }
+}
+
+// 3D Tire & Engine Smoke Puffs
+function spawnSmokePuff3D(x, y, z, isDark = false) {
+  const puff = new THREE.Mesh(
+    new THREE.SphereGeometry(0.32, 10, 10),
+    new THREE.MeshBasicMaterial({
+      color: isDark ? 0x424242 : 0xf5f5f5,
+      transparent: true,
+      opacity: 0.75
+    })
+  );
+  puff.position.set(x + (Math.random() - 0.5) * 0.5, y, z + (Math.random() - 0.5) * 0.5);
+  dynamicGroup.add(puff);
+  particles3D.push({
+    mesh: puff,
+    vx: (Math.random() - 0.5) * 2.5,
+    vy: 2.2 + Math.random() * 2.0,
+    vz: 3.5 + Math.random() * 2.5,
+    gravity: -1.5,
+    grow: 2.4,
+    life: 0.55
+  });
+}
+
+// Shatter Obstacle Barrel/Crate into 14 Spinning, Road-Bouncing 3D Planks & Metal Hoops!
+function shatterObstacleIntoDebris(obs, impactVx = 0, forwardBlastVz = -20) {
+  obs.hit = true;
+  obs.mesh.visible = false;
+
+  const plankGeo = new THREE.BoxGeometry(0.32, 0.14, 0.88);
+  const chunkGeo = new THREE.BoxGeometry(0.38, 0.38, 0.38);
+  const woodColors = [0xd84315, 0xff7043, 0xffca28, 0x8d6e63, 0xfff8e1];
+
+  for (let i = 0; i < 14; i++) {
+    const mat = new THREE.MeshStandardMaterial({
+      color: woodColors[i % woodColors.length],
+      roughness: 0.45
+    });
+    const m = new THREE.Mesh(i % 2 === 0 ? plankGeo : chunkGeo, mat);
+    m.position.set(
+      obs.x + (Math.random() - 0.5) * 0.9,
+      obs.y + 0.2 + Math.random() * 0.6,
+      obs.z + (Math.random() - 0.5) * 0.9
+    );
+    m.castShadow = true;
+    dynamicGroup.add(m);
+
+    const spreadAng = (i / 14) * Math.PI * 2 + (Math.random() - 0.5) * 0.35;
+    const radialSpd = 5 + Math.random() * 11;
+    debrisChunks.push({
+      mesh: m,
+      vx: Math.cos(spreadAng) * radialSpd + impactVx * 0.45,
+      vy: 7 + Math.random() * 11,
+      vz: Math.sin(spreadAng) * radialSpd + forwardBlastVz,
+      rvx: (Math.random() - 0.5) * 18,
+      rvy: (Math.random() - 0.5) * 18,
+      rvz: (Math.random() - 0.5) * 18,
+      life: 1.65
+    });
+  }
+}
+
+function spawn3DBurst(x, y, z, hexColor, count = 14) {
+  const geo = new THREE.OctahedronGeometry(0.18, 0);
+  const mat = new THREE.MeshStandardMaterial({
+    color: hexColor,
+    emissive: hexColor,
+    emissiveIntensity: 0.45,
+    roughness: 0.25
+  });
+  for (let i = 0; i < count; i++) {
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(x, y, z);
+    const ang = Math.random() * Math.PI * 2;
+    const spd = 5 + Math.random() * 9;
+    dynamicGroup.add(m);
+    particles3D.push({
+      mesh: m,
+      vx: Math.cos(ang) * spd,
+      vy: 3.5 + Math.random() * 7.5,
+      vz: Math.sin(ang) * spd,
+      rvx: (Math.random() - 0.5) * 14,
+      rvy: (Math.random() - 0.5) * 14,
+      gravity: 22,
+      bounce: true,
+      life: 0.65
+    });
   }
 }
 
@@ -512,13 +765,17 @@ function buildRaceWorld(worldIdx) {
   obstacles = [];
   activeShells = [];
   particles3D = [];
+  debrisChunks = [];
+  shockwaves3D = [];
 
   checkpointStarsEarned = [false, false, false];
   raceFinished = false;
   podiumOrbitAngle = 0;
+  hitStopTimer = 0;
+  camTrauma = { shake: 0, rollKick: 0, pitchKick: 0, fovKick: 0, zoomKick: 0 };
 
   scene.background = new THREE.Color(cfg.skyColor);
-  scene.fog = new THREE.FogExp2(cfg.fogColor, 0.0075);
+  scene.fog = new THREE.FogExp2(cfg.fogColor, 0.0072);
 
   const trackLen = cfg.trackLength;
 
@@ -559,7 +816,6 @@ function buildRaceWorld(worldIdx) {
     curbR.position.set(roadW / 2 + 0.3, 0.14, sz);
     worldGroup.add(curbL, curbR);
 
-    // 4 interior lane divider stripes
     if (i % 2 === 0) {
       [-4.2, -1.4, 1.4, 4.2].forEach((lx) => {
         const st = new THREE.Mesh(stripeGeo, stripeMat);
@@ -569,7 +825,7 @@ function buildRaceWorld(worldIdx) {
     }
   }
 
-  // Roadside 3D Stylized Trees, Crystals & Fluffy 3D Clouds
+  // Roadside 3D Stylized Trees & Fluffy 3D Clouds
   const trunkMat = new THREE.MeshStandardMaterial({ color: 0x6d4c41, roughness: 0.8 });
   const foliageMat = new THREE.MeshStandardMaterial({ color: cfg.treeColor, roughness: 0.45 });
   const cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.88 });
@@ -590,7 +846,6 @@ function buildRaceWorld(worldIdx) {
       worldGroup.add(tree);
     });
 
-    // Overhead 3D Fluffy Clouds
     if (Math.abs(z) % 36 === 0) {
       const cloud = new THREE.Group();
       const side = (Math.abs(z) / 36) % 2 === 0 ? -1 : 1;
@@ -616,7 +871,6 @@ function buildRaceWorld(worldIdx) {
     archGroup.position.set(0, 0, cpZ);
     worldGroup.add(archGroup);
 
-    // Giant Checkpoint Star in center or lane
     const starLaneX = LANES[(idx * 2 + 1) % LANES.length];
     const starMesh = createStar3DMesh(1.15);
     starMesh.position.set(starLaneX, 1.35, cpZ);
@@ -636,7 +890,7 @@ function buildRaceWorld(worldIdx) {
   finishArch.position.set(0, 0, -trackLen);
   worldGroup.add(finishArch);
 
-  // Populate Track with Regular 3D Stars, Mystery Item Cubes, Rainbow Boost Ramps & Obstacles
+  // Populate Track with Regular 3D Stars, Mystery Item Cubes, Rainbow Boost Ramps & Destructible Obstacles
   const starGeo = new THREE.OctahedronGeometry(0.65, 0);
   const starMat = new THREE.MeshStandardMaterial({
     color: 0xffd54f,
@@ -646,16 +900,14 @@ function buildRaceWorld(worldIdx) {
     roughness: 0.2
   });
 
-  for (let z = -22; z > -trackLen + 24; z -= 14) {
-    // Skip right on top of checkpoint arches
+  for (let z = -18; z > -trackLen + 20; z -= 12) {
     const nearCp = checkpointRatios.some((r) => Math.abs(z - -trackLen * r) < 6);
     if (nearCp) continue;
 
-    const stepIdx = Math.floor(Math.abs(z) / 14);
+    const stepIdx = Math.floor(Math.abs(z) / 12);
 
-    // Line of 3 spinning 3D Gold Stars
     const starLane = LANES[(stepIdx + worldIdx) % LANES.length];
-    const isSkyStar = stepIdx % 4 === 2;
+    const isSkyStar = stepIdx % 5 === 2;
     const starY = isSkyStar ? 3.2 : 1.05;
     const sMesh = new THREE.Mesh(starGeo, starMat);
     sMesh.position.set(starLane, starY, z);
@@ -669,7 +921,6 @@ function buildRaceWorld(worldIdx) {
       checkpointIdx: -1
     });
 
-    // 3D Rainbow Boost Ramp right before sky stars!
     if (isSkyStar) {
       const padGroup = new THREE.Group();
       padGroup.position.set(starLane, 0.08, z + 6.5);
@@ -683,7 +934,6 @@ function buildRaceWorld(worldIdx) {
       boostPads.push({ mesh: padGroup, x: starLane, z: z + 6.5, triggered: false });
     }
 
-    // 3D Translucent Rainbow Mystery Item Box
     if (stepIdx % 3 === 1) {
       const boxLane = LANES[(stepIdx * 2 + 2) % LANES.length];
       const boxGroup = new THREE.Group();
@@ -706,25 +956,25 @@ function buildRaceWorld(worldIdx) {
       mysteryBoxes.push({ mesh: boxGroup, x: boxLane, z, active: true });
     }
 
-    // 3D Obstacle Crates / Barrels (placed on 1 or 2 lanes, leaving 3+ lanes open)
+    // Place 1 to 2 Destructible 3D Barrels/Crates per row for rich crash interactions
+    const obsLanes = [LANES[(stepIdx * 3 + worldIdx) % LANES.length]];
     if (stepIdx % 2 === 0) {
-      const obsLane = LANES[(stepIdx * 3 + worldIdx) % LANES.length];
-      if (Math.abs(obsLane - starLane) > 0.5) {
-        const obsMesh = createObstacle3DMesh(stepIdx);
-        obsMesh.position.set(obsLane, 0.65, z);
-        dynamicGroup.add(obsMesh);
-        obstacles.push({
-          mesh: obsMesh,
-          x: obsLane,
-          y: 0.65,
-          z,
-          hit: false,
-          vx: 0,
-          vy: 0,
-          vz: 0
-        });
-      }
+      obsLanes.push(LANES[(stepIdx * 3 + worldIdx + 2) % LANES.length]);
     }
+    obsLanes.forEach((obsLane, oIdx) => {
+      if (Math.abs(obsLane - starLane) < 0.4) return;
+      const obsMesh = createObstacle3DMesh(stepIdx + oIdx);
+      obsMesh.position.set(obsLane, 0.68, z);
+      obsMesh.castShadow = true;
+      dynamicGroup.add(obsMesh);
+      obstacles.push({
+        mesh: obsMesh,
+        x: obsLane,
+        y: 0.68,
+        z,
+        hit: false
+      });
+    });
   }
 
   // Create Player 3D Smiling Critter Kart
@@ -734,9 +984,14 @@ function buildRaceWorld(worldIdx) {
   playerState.y = 0;
   playerState.vy = 0;
   playerState.z = 0;
-  playerState.speed = 24;
+  playerState.speed = 25;
+  playerState.knockVx = 0;
+  playerState.knockVz = 0;
   playerState.roll = 0;
+  playerState.pitchKick = 0;
   playerState.spinAngle = 0;
+  playerState.squash = 0;
+  playerState.dizzyTimer = 0;
   playerState.gliding = false;
   playerState.turboTimer = 0;
   playerState.magnetTimer = 0;
@@ -744,12 +999,12 @@ function buildRaceWorld(worldIdx) {
   playerKart.root.position.set(0, 0, 0);
   dynamicGroup.add(playerKart.root);
 
-  // Create 2 Friendly Rival 3D Smiling Critter Karts
-  [1, 2].forEach((offset, idx) => {
+  // Create 3 Active 3D Rival Smiling Critter Karts with Full Bumper-Car & Flip Physics!
+  [1, 2, 3].forEach((offset, idx) => {
     const rCfg = CRITTERS[(worldIdx + offset) % CRITTERS.length];
     const rKart = createKartMesh(rCfg, false);
-    const startLane = idx === 0 ? 1 : 3;
-    const startZ = -6 - idx * 5;
+    const startLane = idx === 0 ? 1 : idx === 1 ? 3 : 0;
+    const startZ = -8 - idx * 6;
     rKart.root.position.set(LANES[startLane], 0, startZ);
     dynamicGroup.add(rKart.root);
     rivals.push({
@@ -757,10 +1012,18 @@ function buildRaceWorld(worldIdx) {
       kart: rKart,
       laneIndex: startLane,
       x: LANES[startLane],
+      y: 0,
+      vy: 0,
       z: startZ,
-      baseSpeed: 21.5 + idx * 0.9,
+      knockVx: 0,
+      knockVz: 0,
+      roll: 0,
+      tumbleX: 0,
+      baseSpeed: 22.0 + idx * 0.85,
       spinTimer: 0,
-      laneSwitchTimer: 1.8 + idx
+      squash: 0,
+      clashCooldown: 0,
+      laneSwitchTimer: 1.5 + idx * 0.7
     });
   });
 
@@ -788,7 +1051,6 @@ function createRainbowArchMesh(roadW) {
 
 function createFinishLineArchMesh(roadW) {
   const g = createRainbowArchMesh(roadW);
-  // Add checkered banner blocks across top
   const count = 12;
   const blockW = (roadW + 1.0) / count;
   for (let i = 0; i < count; i++) {
@@ -824,58 +1086,168 @@ function createStar3DMesh(scale = 1) {
 
 function createObstacle3DMesh(stepIdx) {
   const g = new THREE.Group();
-  const isBarrel = stepIdx % 4 === 0;
+  const isBarrel = stepIdx % 2 === 0;
   if (isBarrel) {
     const barrel = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.62, 0.62, 1.25, 14),
-      new THREE.MeshStandardMaterial({ color: 0xd84315, roughness: 0.5 })
+      new THREE.CylinderGeometry(0.68, 0.68, 1.35, 14),
+      new THREE.MeshStandardMaterial({ color: 0xd84315, roughness: 0.45 })
     );
-    const band = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.65, 0.65, 0.25, 14),
-      new THREE.MeshStandardMaterial({ color: 0xffd54f })
+    const bandTop = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.71, 0.71, 0.18, 14),
+      new THREE.MeshStandardMaterial({ color: 0xffd54f, metalness: 0.5 })
     );
-    g.add(barrel, band);
+    bandTop.position.y = 0.36;
+    const bandBot = bandTop.clone();
+    bandBot.position.y = -0.36;
+    g.add(barrel, bandTop, bandBot);
   } else {
     const crate = new THREE.Mesh(
-      new THREE.BoxGeometry(1.25, 1.25, 1.25),
+      new THREE.BoxGeometry(1.36, 1.36, 1.36),
       new THREE.MeshStandardMaterial({ color: 0xff7043, roughness: 0.45 })
     );
-    const trim = new THREE.Mesh(
-      new THREE.BoxGeometry(1.3, 0.28, 1.3),
+    const brace1 = new THREE.Mesh(
+      new THREE.BoxGeometry(1.42, 0.24, 1.42),
       new THREE.MeshStandardMaterial({ color: 0xffe082 })
     );
-    g.add(crate, trim);
+    const brace2 = new THREE.Mesh(
+      new THREE.BoxGeometry(0.24, 1.42, 1.42),
+      new THREE.MeshStandardMaterial({ color: 0xffe082 })
+    );
+    g.add(crate, brace1, brace2);
   }
   return g;
 }
 
-function spawn3DBurst(x, y, z, hexColor, count = 14) {
-  const geo = new THREE.SphereGeometry(0.18, 8, 8);
-  const mat = new THREE.MeshBasicMaterial({ color: hexColor });
-  for (let i = 0; i < count; i++) {
-    const m = new THREE.Mesh(geo, mat);
-    m.position.set(x, y, z);
-    const ang = Math.random() * Math.PI * 2;
-    const spd = 4 + Math.random() * 8;
-    dynamicGroup.add(m);
-    particles3D.push({
-      mesh: m,
-      vx: Math.cos(ang) * spd,
-      vy: 3 + Math.random() * 7,
-      vz: Math.sin(ang) * spd,
-      life: 0.75
-    });
+// Execute a Visceral Obstacle Collision (either Explosive Turbo Smash OR Heavy Physical Crash!)
+function handleObstacleCollision(obs) {
+  const contactX = (playerState.x + obs.x) * 0.5;
+  const contactY = 0.85;
+  const contactZ = obs.z;
+
+  if (playerState.turboTimer > 0) {
+    // TURBO SMASH: Plow through with Sonic Boom, FOV punch & 14-piece flying debris!
+    hitStopTimer = 0.045;
+    camTrauma.shake = 1.05;
+    camTrauma.fovKick = 14;
+    camTrauma.pitchKick = 0.08;
+    camTrauma.zoomKick = -1.2;
+    playerState.squash = 0.32;
+
+    shatterObstacleIntoDebris(obs, (obs.x - playerState.x) * 9, -(playerState.speed + 28));
+    spawnShockwave3D(contactX, contactY, contactZ, 0xffea00, 5.4);
+    spawnMetalSparks3D(contactX, contactY, contactZ, 26);
+    triggerImpactScreenEffect('smash-boom', '🔥');
+    playSmashShatterSfx();
+  } else {
+    // HARD PHYSICAL CRASH: Hit-stop freeze, violent camera whip + shake, true backward rebound,
+    // lateral lane shunt, chassis squash-and-stretch, nose pitch bucking, 14-piece crate shatter,
+    // and spinning 3D dizzy stars halo!
+    hitStopTimer = 0.065;
+    const shuntDir = playerState.x >= obs.x ? 1 : -1;
+
+    const nextLane = Math.max(0, Math.min(LANES.length - 1, playerState.laneIndex + shuntDir));
+    playerState.laneIndex = nextLane;
+
+    playerState.speed = 6.0; // sudden impact wall-stop deceleration!
+    playerState.vy = 10.4;
+    playerState.knockVx = shuntDir * 13.5;
+    playerState.knockVz = 28.0; // real physical backward rebound off the crate!
+    playerState.roll = -shuntDir * 0.65;
+    playerState.pitchKick = -0.75; // nose violently rears skyward!
+    playerState.spinAngle = Math.PI * 2;
+    playerState.squash = 0.55;
+    playerState.dizzyTimer = 1.55;
+    playerState.hitCooldown = 0.9;
+
+    camTrauma.shake = 1.45;
+    camTrauma.rollKick = shuntDir * 0.25;
+    camTrauma.pitchKick = -0.18;
+    camTrauma.fovKick = -12;
+    camTrauma.zoomKick = -2.4; // camera whips close to the crash!
+
+    shatterObstacleIntoDebris(obs, shuntDir * 11, -16);
+    spawnShockwave3D(contactX, contactY, contactZ, 0xff3d00, 5.0);
+    spawnMetalSparks3D(contactX, contactY, contactZ, 28);
+    for (let s = 0; s < 5; s++) {
+      spawnSmokePuff3D(playerState.x, 0.6, playerState.z + 1.0, true);
+    }
+    triggerImpactScreenEffect('crash-hard', '💥');
+    showRaceToast('💥💫');
+    playHeavyCrashSfx();
   }
 }
 
-// Player Actions & Power-Ups
+// Execute a Visceral 3D Kart-vs-Kart Collision (Sideswipe Door-Bang or Airborne Rear-End Takedown!)
+function handleRivalKartCollision(r) {
+  const contactX = (playerState.x + r.x) * 0.5;
+  const contactY = 0.85;
+  const contactZ = (playerState.z + r.z) * 0.5;
+  const shuntDir = playerState.x >= r.x ? 1 : -1;
+  const isRearRam = playerState.z > r.z + 0.6 || playerState.turboTimer > 0;
+
+  r.clashCooldown = 0.55;
+
+  if (isRearRam) {
+    // AIRBORNE TAKEDOWN: Catapult the rival kart skyward in a 3D head-over-heels flip!
+    hitStopTimer = 0.055;
+    camTrauma.shake = 1.25;
+    camTrauma.fovKick = 13;
+    camTrauma.rollKick = shuntDir * 0.16;
+    camTrauma.zoomKick = -1.6;
+
+    playerState.squash = 0.38;
+    playerState.pitchKick = 0.26;
+    playerState.knockVx = shuntDir * 6.5;
+
+    r.vy = 15.0;
+    r.knockVx = -shuntDir * 14.5;
+    r.knockVz = -30.0;
+    r.tumbleX = Math.PI * 4;
+    r.spinTimer = 1.75;
+    r.squash = 0.5;
+    r.laneIndex = Math.max(0, Math.min(LANES.length - 1, r.laneIndex - shuntDir));
+
+    spawnShockwave3D(contactX, contactY, contactZ, 0xffea00, 5.2);
+    spawnMetalSparks3D(contactX, contactY, contactZ, 28);
+    triggerImpactScreenEffect('smash-boom', '💥');
+    playSmashShatterSfx();
+    showRaceToast('🏎️💥✨');
+  } else {
+    // BUMPER-CAR SIDESWIPE DOOR-BANG: Grinding metal sparks & violent opposite lateral recoil!
+    hitStopTimer = 0.045;
+    camTrauma.shake = 1.05;
+    camTrauma.rollKick = shuntDir * 0.2;
+    camTrauma.zoomKick = -1.4;
+
+    playerState.knockVx = shuntDir * 12.0;
+    playerState.roll = -shuntDir * 0.52;
+    playerState.squash = 0.36;
+    playerState.vy = Math.max(playerState.vy, 4.2);
+
+    r.knockVx = -shuntDir * 16.5;
+    r.vy = 7.5;
+    r.roll = shuntDir * 0.62;
+    r.spinTimer = 1.25;
+    r.squash = 0.42;
+    r.laneIndex = Math.max(0, Math.min(LANES.length - 1, r.laneIndex - shuntDir));
+
+    spawnShockwave3D(contactX, contactY, contactZ, 0x00e5ff, 4.4);
+    spawnMetalSparks3D(contactX, contactY, contactZ, 26);
+    spawnSmokePuff3D(contactX, 0.4, contactZ, false);
+    triggerImpactScreenEffect('smash-boom', '⚡');
+    playKartSideswipeSfx();
+  }
+}
+
+// Player Steering & Power-Up Controls
 function steerLane(delta) {
   ensureAudio();
   hideSteerGuide();
   const next = Math.max(0, Math.min(LANES.length - 1, playerState.laneIndex + delta));
   if (next !== playerState.laneIndex) {
     playerState.laneIndex = next;
-    playerState.roll = -delta * 0.28;
+    playerState.roll = -delta * 0.32;
+    spawnSmokePuff3D(playerState.x, 0.25, playerState.z + 1.1, false);
     playSteerSfx();
   }
 }
@@ -884,7 +1256,8 @@ function triggerJumpGlide() {
   ensureAudio();
   hideSteerGuide();
   if (playerState.y <= 0.15) {
-    playerState.vy = 11.5;
+    playerState.vy = 11.8;
+    playerState.squash = -0.25;
     playerState.gliding = true;
     playJumpSfx();
     showRaceToast('🪽🌈✨');
@@ -898,6 +1271,10 @@ function triggerTurboBoost() {
   ensureAudio();
   hideSteerGuide();
   playerState.turboTimer = 5.5;
+  playerState.dizzyTimer = 0;
+  playerState.hitCooldown = 0;
+  camTrauma.fovKick = 10;
+  camTrauma.shake = 0.45;
   playTurboSfx();
   showRaceToast('🍄🔥✨');
   updateBoostPedalVisuals();
@@ -928,7 +1305,7 @@ function triggerRainbowShell() {
     mesh: shellGroup,
     x: playerState.x,
     z: playerState.z - 2.2,
-    vz: -(playerState.speed + 28),
+    vz: -(playerState.speed + 30),
     life: 3.5
   });
 }
@@ -992,7 +1369,6 @@ function updateHudDom() {
 function finishRace() {
   if (raceFinished) return;
   raceFinished = true;
-  // Ensure all 3 stars are awarded on crossing the finish arch
   checkpointStarsEarned = [true, true, true];
   cupStars[currentWorld] = 3;
   saveProgress();
@@ -1000,7 +1376,6 @@ function finishRace() {
   renderWorldSelector();
   playWinFanfare();
 
-  // Launch celebratory 3D rainbow fireworks around the finish arch
   for (let i = 0; i < 5; i++) {
     const col = RAINBOW_HEX[i % RAINBOW_HEX.length];
     spawn3DBurst(
@@ -1025,13 +1400,68 @@ function updateGame3D(dt, timeSec) {
   const cfg = CRITTERS[currentWorld];
   const trackLen = cfg.trackLength;
 
-  // Update 3D particles
+  // Always animate 3D Shockwave Rings, Debris & Sparks even during Hit-Stop freeze!
+  for (let i = shockwaves3D.length - 1; i >= 0; i--) {
+    const sw = shockwaves3D[i];
+    sw.life -= dt;
+    const progress = 1 - Math.max(0, sw.life) / sw.maxLife;
+    const sc = 0.35 + progress * sw.maxScale;
+    sw.ring.scale.set(sc, sc, 1);
+    sw.ring.material.opacity = (1 - progress) * 0.95;
+    sw.core.scale.setScalar(0.5 + progress * (sw.maxScale * 0.65));
+    sw.core.rotation.y += dt * 14;
+    sw.core.rotation.x += dt * 10;
+    sw.core.material.opacity = (1 - progress) * 0.85;
+    if (sw.life <= 0) {
+      dynamicGroup.remove(sw.ring, sw.core);
+      shockwaves3D.splice(i, 1);
+    }
+  }
+
+  // Update 14-piece Shattering Obstacle Planks & Chunks with Road Bounce!
+  for (let i = debrisChunks.length - 1; i >= 0; i--) {
+    const d = debrisChunks[i];
+    d.mesh.position.x += d.vx * dt;
+    d.mesh.position.y += d.vy * dt;
+    d.mesh.position.z += d.vz * dt;
+    d.mesh.rotation.x += d.rvx * dt;
+    d.mesh.rotation.y += d.rvy * dt;
+    d.mesh.rotation.z += d.rvz * dt;
+    d.vy -= 28 * dt;
+
+    if (d.mesh.position.y < 0.18 && d.vy < 0) {
+      d.mesh.position.y = 0.18;
+      d.vy = -d.vy * 0.54;
+      d.vx *= 0.82;
+      d.vz *= 0.82;
+    }
+
+    d.life -= dt;
+    if (d.life <= 0) {
+      dynamicGroup.remove(d.mesh);
+      debrisChunks.splice(i, 1);
+    }
+  }
+
+  // Update 3D Sparks, Smoke & Burst Particles
   for (let i = particles3D.length - 1; i >= 0; i--) {
     const p = particles3D[i];
     p.mesh.position.x += p.vx * dt;
     p.mesh.position.y += p.vy * dt;
     p.mesh.position.z += p.vz * dt;
-    p.vy -= 14 * dt;
+    if (p.rvx) p.mesh.rotation.x += p.rvx * dt;
+    if (p.rvy) p.mesh.rotation.y += p.rvy * dt;
+    p.vy -= (p.gravity !== undefined ? p.gravity : 16) * dt;
+    if (p.bounce && p.mesh.position.y < 0.1 && p.vy < 0) {
+      p.mesh.position.y = 0.1;
+      p.vy = -p.vy * 0.5;
+    }
+    if (p.grow) {
+      p.mesh.scale.addScalar(p.grow * dt);
+      if (p.mesh.material.opacity !== undefined) {
+        p.mesh.material.opacity = Math.max(0, p.life * 1.2);
+      }
+    }
     p.life -= dt;
     if (p.life <= 0) {
       dynamicGroup.remove(p.mesh);
@@ -1039,8 +1469,13 @@ function updateGame3D(dt, timeSec) {
     }
   }
 
+  // Hit-Stop Micro-Freeze for Maximum Impact Feel!
+  if (hitStopTimer > 0) {
+    hitStopTimer = Math.max(0, hitStopTimer - dt);
+    return;
+  }
+
   if (raceFinished) {
-    // 3D Orbiting Podium Camera around victorious Smiling Critter Kart!
     podiumOrbitAngle += dt * 1.35;
     const camRadius = 7.5;
     camera.position.set(
@@ -1053,7 +1488,7 @@ function updateGame3D(dt, timeSec) {
     return;
   }
 
-  // Power-Up Timers
+  // Power-Up & Status Timers
   if (playerState.turboTimer > 0) {
     playerState.turboTimer = Math.max(0, playerState.turboTimer - dt);
     if (playerState.turboTimer === 0) updateBoostPedalVisuals();
@@ -1065,24 +1500,50 @@ function updateGame3D(dt, timeSec) {
   if (playerState.hitCooldown > 0) {
     playerState.hitCooldown = Math.max(0, playerState.hitCooldown - dt);
   }
+  if (playerState.dizzyTimer > 0) {
+    playerState.dizzyTimer = Math.max(0, playerState.dizzyTimer - dt);
+    playerState.smokeTick -= dt;
+    if (playerState.smokeTick <= 0) {
+      playerState.smokeTick = 0.11;
+      spawnSmokePuff3D(playerState.x, playerState.y + 0.55, playerState.z + 1.35, true);
+    }
+  }
 
-  // Compute Forward Kart Speed
-  const targetSpeed = playerState.turboTimer > 0 ? 37 : playerState.hitCooldown > 0 ? 15 : 24.5;
-  playerState.speed += (targetSpeed - playerState.speed) * Math.min(1, dt * 6);
-  playerState.z -= playerState.speed * dt;
+  // Decay Knockback Velocities & Camera Trauma
+  playerState.knockVx *= Math.pow(0.015, dt);
+  playerState.knockVz *= Math.pow(0.008, dt);
+  playerState.pitchKick *= Math.pow(0.02, dt);
+  playerState.squash *= Math.pow(0.01, dt);
 
-  // Smooth Horizontal Lane Drift & Banking Roll
+  camTrauma.shake = Math.max(0, camTrauma.shake - dt * 3.1);
+  camTrauma.rollKick *= Math.pow(0.03, dt);
+  camTrauma.pitchKick *= Math.pow(0.03, dt);
+  camTrauma.fovKick *= Math.pow(0.04, dt);
+  camTrauma.zoomKick = (camTrauma.zoomKick || 0) * Math.pow(0.03, dt);
+
+  // Compute Forward Kart Speed + Knockback Rebound
+  const targetSpeed = playerState.turboTimer > 0 ? 37.5 : playerState.hitCooldown > 0 ? 14 : 25.0;
+  playerState.speed += (targetSpeed - playerState.speed) * Math.min(1, dt * 6.5);
+  playerState.z -= (playerState.speed - playerState.knockVz) * dt;
+
+  // Horizontal Lane Drift + Lateral Collision Impulse
   const targetX = LANES[playerState.laneIndex];
   const dx = targetX - playerState.x;
-  playerState.x += dx * Math.min(1, dt * 10);
-  playerState.roll += (dx * -0.11 - playerState.roll) * Math.min(1, dt * 10);
+  playerState.x += dx * Math.min(1, dt * 10.5) + playerState.knockVx * dt;
+  playerState.x = Math.max(-7.3, Math.min(7.3, playerState.x));
+  playerState.roll += (dx * -0.11 - playerState.roll) * Math.min(1, dt * 9.5);
 
-  // Vertical Jump & 3D Glider Wing Physics
+  // Vertical Jump, Crash Hop & 3D Glider Wing Physics
   if (playerState.y > 0 || playerState.vy !== 0) {
-    const gravity = playerState.gliding && playerState.vy < 0 ? 7.2 : 24.0;
+    const gravity = playerState.gliding && playerState.vy < 0 ? 7.2 : 26.0;
     playerState.vy -= gravity * dt;
     playerState.y += playerState.vy * dt;
     if (playerState.y <= 0) {
+      if (playerState.vy < -5) {
+        // Landing squash!
+        playerState.squash = 0.24;
+        spawnSmokePuff3D(playerState.x, 0.2, playerState.z + 0.8, false);
+      }
       playerState.y = 0;
       playerState.vy = 0;
       if (playerState.gliding) {
@@ -1092,19 +1553,28 @@ function updateGame3D(dt, timeSec) {
     }
   }
 
-  // Spin recovery animation when bumping an obstacle
   if (playerState.spinAngle > 0) {
     playerState.spinAngle = Math.max(0, playerState.spinAngle - dt * Math.PI * 3.8);
   }
 
-  // Update Player Kart 3D Transform, Wheels, Glider Wings & Turbo Flames
+  // Apply 3D Transform + Chassis Squash-and-Stretch + Dizzy Stars Halo
   playerKart.root.position.set(playerState.x, playerState.y, playerState.z);
   playerKart.root.rotation.z = playerState.roll;
   playerKart.root.rotation.y = dx * -0.08 + playerState.spinAngle;
-  playerKart.root.rotation.x = playerState.y > 0.1 ? Math.min(0.22, playerState.vy * 0.02) : 0;
+  playerKart.root.rotation.x =
+    playerState.pitchKick + (playerState.y > 0.1 ? Math.min(0.22, playerState.vy * 0.02) : 0);
+
+  const sq = playerState.squash;
+  playerKart.deformGroup.scale.set(1 + sq * 0.75, 1 - sq * 0.55, 1 - sq * 0.72);
+
+  playerKart.dizzyHalo.visible = playerState.dizzyTimer > 0;
+  if (playerKart.dizzyHalo.visible) {
+    playerKart.dizzyHalo.rotation.y += dt * 9.5;
+    playerKart.dizzyHalo.rotation.z = Math.sin(timeSec * 10) * 0.22;
+  }
 
   playerKart.wheels.forEach((w) => {
-    w.rotation.x -= playerState.speed * dt * 1.4;
+    w.rotation.x -= playerState.speed * dt * 1.45;
   });
 
   playerKart.flames.forEach((f) => {
@@ -1128,33 +1598,80 @@ function updateGame3D(dt, timeSec) {
     playerKart.gliderWings.scale.set(0.01, 1, 1);
   }
 
-  // Update 2 Friendly Rival 3D Karts
+  // Update 3 Active 3D Rival Karts & Check Kart-vs-Kart Collisions!
   rivals.forEach((r) => {
-    r.z -= r.baseSpeed * dt;
-    // Keep rivals within reasonablerubber-band range so race feels lively
-    if (r.z < playerState.z - 26) {
-      r.z = playerState.z - 26;
+    if (r.clashCooldown > 0) r.clashCooldown = Math.max(0, r.clashCooldown - dt);
+    if (r.spinTimer > 0) r.spinTimer = Math.max(0, r.spinTimer - dt);
+
+    r.knockVx *= Math.pow(0.02, dt);
+    r.knockVz *= Math.pow(0.015, dt);
+    r.squash *= Math.pow(0.015, dt);
+    r.roll *= Math.pow(0.03, dt);
+
+    const rEffectiveSpeed = r.spinTimer > 0 ? r.baseSpeed * 0.52 : r.baseSpeed;
+    r.z -= (rEffectiveSpeed - r.knockVz) * dt;
+
+    // Keep rivals near the action so bumper-car battles happen frequently
+    if (r.z < playerState.z - 28) {
+      r.z = playerState.z - 28;
     } else if (r.z > playerState.z + 18) {
       r.z = playerState.z + 18;
     }
 
     r.laneSwitchTimer -= dt;
-    if (r.laneSwitchTimer <= 0) {
-      r.laneSwitchTimer = 2.0 + Math.random() * 1.8;
+    if (r.laneSwitchTimer <= 0 && r.spinTimer <= 0) {
+      r.laneSwitchTimer = 1.8 + Math.random() * 1.8;
       const step = Math.random() < 0.5 ? -1 : 1;
       r.laneIndex = Math.max(0, Math.min(LANES.length - 1, r.laneIndex + step));
     }
-    r.x += (LANES[r.laneIndex] - r.x) * Math.min(1, dt * 6);
 
-    if (r.spinTimer > 0) {
-      r.spinTimer = Math.max(0, r.spinTimer - dt);
+    r.x += (LANES[r.laneIndex] - r.x) * Math.min(1, dt * 6.5) + r.knockVx * dt;
+    r.x = Math.max(-7.2, Math.min(7.2, r.x));
+
+    // Vertical airborne tumble physics for rival karts when rammed or shelled!
+    if (r.y > 0 || r.vy !== 0) {
+      r.vy -= 26.0 * dt;
+      r.y += r.vy * dt;
+      if (r.y <= 0) {
+        if (r.vy < -4) {
+          r.squash = 0.35;
+          spawnMetalSparks3D(r.x, 0.25, r.z, 10);
+        }
+        r.y = 0;
+        r.vy = 0;
+      }
     }
 
-    r.kart.root.position.set(r.x, 0, r.z);
+    if (r.tumbleX > 0) {
+      r.tumbleX = Math.max(0, r.tumbleX - dt * Math.PI * 3.6);
+    }
+
+    r.kart.root.position.set(r.x, r.y, r.z);
     r.kart.root.rotation.y = r.spinTimer > 0 ? r.spinTimer * Math.PI * 4 : 0;
+    r.kart.root.rotation.x = r.tumbleX;
+    r.kart.root.rotation.z = r.roll;
+    r.kart.deformGroup.scale.set(
+      1 + r.squash * 0.7,
+      1 - r.squash * 0.5,
+      1 - r.squash * 0.65
+    );
+    r.kart.dizzyHalo.visible = r.spinTimer > 0;
+    if (r.kart.dizzyHalo.visible) {
+      r.kart.dizzyHalo.rotation.y += dt * 10;
+    }
     r.kart.wheels.forEach((w) => {
-      w.rotation.x -= r.baseSpeed * dt * 1.3;
+      w.rotation.x -= rEffectiveSpeed * dt * 1.3;
     });
+
+    // Check 3D Kart-vs-Kart Collision with Player!
+    if (
+      r.clashCooldown <= 0 &&
+      Math.abs(r.z - playerState.z) < 2.55 &&
+      Math.abs(r.x - playerState.x) < 1.85 &&
+      Math.abs(r.y - playerState.y) < 1.4
+    ) {
+      handleRivalKartCollision(r);
+    }
   });
 
   // Update Homing Rainbow Shells
@@ -1163,27 +1680,32 @@ function updateGame3D(dt, timeSec) {
     sh.z += sh.vz * dt;
     sh.life -= dt;
     sh.mesh.position.set(sh.x, 0.7, sh.z);
-    sh.mesh.rotation.y += dt * 10;
+    sh.mesh.rotation.y += dt * 12;
 
-    // Hit obstacle ahead
+    // Shatter obstacles in path
     for (const obs of obstacles) {
       if (obs.hit) continue;
-      if (Math.abs(obs.z - sh.z) < 4.5 && Math.abs(obs.x - sh.x) < 3.6) {
-        obs.hit = true;
-        obs.vy = 12;
-        obs.vx = (Math.random() - 0.5) * 10;
-        obs.vz = -18;
-        spawn3DBurst(obs.x, 1.0, obs.z, 0x00e676, 12);
-        playTone(520, 'triangle', 0.12, 0.14, 880);
+      if (Math.abs(obs.z - sh.z) < 4.5 && Math.abs(obs.x - sh.x) < 3.8) {
+        shatterObstacleIntoDebris(obs, (obs.x - sh.x) * 6, -24);
+        spawnShockwave3D(obs.x, 0.9, obs.z, 0x00e676, 4.2);
+        spawnMetalSparks3D(obs.x, 0.9, obs.z, 16);
+        camTrauma.shake = Math.max(camTrauma.shake, 0.55);
+        playSmashShatterSfx();
       }
     }
 
-    // Spin rival kart if close
+    // Catapult rival karts in path
     rivals.forEach((r) => {
-      if (Math.abs(r.z - sh.z) < 2.5 && Math.abs(r.x - sh.x) < 2.2 && r.spinTimer <= 0) {
-        r.spinTimer = 1.0;
-        r.z += 4;
-        spawn3DBurst(r.x, 1.2, r.z, 0xffd54f, 10);
+      if (Math.abs(r.z - sh.z) < 2.8 && Math.abs(r.x - sh.x) < 2.5 && r.spinTimer <= 0) {
+        r.vy = 13.5;
+        r.knockVz = -24;
+        r.tumbleX = Math.PI * 4;
+        r.spinTimer = 1.6;
+        r.squash = 0.45;
+        spawnShockwave3D(r.x, 1.0, r.z, 0x00e676, 4.5);
+        spawnMetalSparks3D(r.x, 1.0, r.z, 20);
+        camTrauma.shake = Math.max(camTrauma.shake, 0.65);
+        playSmashShatterSfx();
       }
     });
 
@@ -1198,7 +1720,6 @@ function updateGame3D(dt, timeSec) {
     if (st.collected) return;
     st.mesh.rotation.y += dt * 3.0;
 
-    // Pull stars into kart when Magnet is active or when passing Checkpoint Star Arch
     const distZ = Math.abs(st.z - playerState.z);
     const pullRadius =
       playerState.magnetTimer > 0 ? 18 : st.checkpointIdx >= 0 ? 9.5 : 2.3;
@@ -1235,6 +1756,7 @@ function updateGame3D(dt, timeSec) {
     if (Math.abs(mb.z - playerState.z) < 2.2 && Math.abs(mb.x - playerState.x) < 2.1) {
       mb.active = false;
       mb.mesh.visible = false;
+      spawnShockwave3D(mb.x, 1.3, mb.z, 0xe040fb, 3.6);
       spawn3DBurst(mb.x, 1.3, mb.z, 0xe040fb, 14);
       const roll = Math.floor(Math.random() * 3);
       if (roll === 0) triggerTurboBoost();
@@ -1243,67 +1765,51 @@ function updateGame3D(dt, timeSec) {
     }
   });
 
-  // Update 3D Rainbow Boost Ramps
+  // Update 3D Launch Ramps (launch into air without auto-invincibility so normal crashes stay physical!)
   boostPads.forEach((bp) => {
     if (
       !bp.triggered &&
-      Math.abs(bp.z - playerState.z) < 2.3 &&
-      Math.abs(bp.x - playerState.x) < 1.9
+      Math.abs(bp.z - playerState.z) < 2.2 &&
+      Math.abs(bp.x - playerState.x) < 1.8
     ) {
       bp.triggered = true;
-      playerState.turboTimer = Math.max(playerState.turboTimer, 2.8);
       triggerJumpGlide();
     }
   });
 
-  // Update 3D Obstacles
+  // Check Player vs Destructible 3D Obstacles
   obstacles.forEach((obs) => {
-    if (obs.hit) {
-      obs.mesh.position.x += obs.vx * dt;
-      obs.mesh.position.y += obs.vy * dt;
-      obs.mesh.position.z += obs.vz * dt;
-      obs.mesh.rotation.x += dt * 8;
-      obs.mesh.rotation.z += dt * 6;
-      obs.vy -= 20 * dt;
-      return;
-    }
-
+    if (obs.hit) return;
     if (
-      Math.abs(obs.z - playerState.z) < 1.85 &&
-      Math.abs(obs.x - playerState.x) < 1.55 &&
-      playerState.y < 1.25
+      Math.abs(obs.z - playerState.z) < 1.95 &&
+      Math.abs(obs.x - playerState.x) < 1.62 &&
+      playerState.y < 1.35
     ) {
-      obs.hit = true;
-      obs.vy = 11;
-      obs.vx = (obs.x >= playerState.x ? 1 : -1) * 8;
-      obs.vz = -16;
-
-      if (playerState.turboTimer > 0) {
-        // Smash right through during Turbo!
-        spawn3DBurst(obs.x, 1.0, obs.z, 0xff6d00, 14);
-        playTone(480, 'triangle', 0.1, 0.14, 760);
-      } else {
-        // Forgiving spin-hop without losing race progress
-        playerState.hitCooldown = 0.55;
-        playerState.spinAngle = Math.PI * 2;
-        spawn3DBurst(obs.x, 1.0, obs.z, 0xff8a80, 10);
-        playTone(220, 'sine', 0.16, 0.14, 150);
-      }
+      handleObstacleCollision(obs);
     }
   });
 
-  // Update 3D Chase Camera behind Player Kart
-  const targetFov = playerState.turboTimer > 0 ? 68 : 58;
-  camera.fov += (targetFov - camera.fov) * Math.min(1, dt * 6);
+  // Update 3D Chase Camera with Trauma Shake, FOV Kick, Zoom Whip & Dutch-Roll Jolt!
+  const baseFov = playerState.turboTimer > 0 ? 68 : 58;
+  camera.fov += (baseFov + camTrauma.fovKick - camera.fov) * Math.min(1, dt * 9);
   camera.updateProjectionMatrix();
 
-  const camX = playerState.x * 0.58;
-  const camY = 4.35 + playerState.y * 0.45;
-  const camZ = playerState.z + 8.6;
-  camera.position.set(camX, camY, camZ);
-  camera.lookAt(playerState.x * 0.75, 1.15 + playerState.y * 0.3, playerState.z - 12);
+  const shakePow = camTrauma.shake * camTrauma.shake;
+  const shakeX = (Math.random() * 2 - 1) * shakePow * 0.72;
+  const shakeY = (Math.random() * 2 - 1) * shakePow * 0.58;
+  const shakeZ = (Math.random() * 2 - 1) * shakePow * 0.45;
 
-  // Move directional light with player so shadows stay crisp
+  const camX = playerState.x * 0.58 + shakeX;
+  const camY = Math.max(1.8, 4.35 + playerState.y * 0.45 + shakeY);
+  const camZ = playerState.z + 8.6 + (camTrauma.zoomKick || 0) + shakeZ;
+  camera.position.set(camX, camY, camZ);
+  camera.lookAt(
+    playerState.x * 0.75 + shakeX * 0.4,
+    1.15 + playerState.y * 0.3 + camTrauma.pitchKick * 3.5,
+    playerState.z - 12
+  );
+  camera.rotation.z += camTrauma.rollKick;
+
   dirLight.position.set(playerState.x + 20, 40, playerState.z + 25);
   dirLight.target.position.set(playerState.x, 0, playerState.z - 10);
   dirLight.target.updateMatrixWorld();
@@ -1334,7 +1840,6 @@ canvas.addEventListener('pointerdown', (e) => {
   pointerStartX = e.clientX;
   pointerStartY = e.clientY;
 
-  // Map horizontal screen tap directly to 1 of the 5 lanes for instant kid control!
   const ratioX = e.clientX / window.innerWidth;
   if (ratioX < 0.26) steerLane(-1);
   else if (ratioX > 0.74) steerLane(1);

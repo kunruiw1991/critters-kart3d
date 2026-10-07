@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>🏎️🌈🏆</title>
+  <title>🏎️💥🌈🏆</title>
   <link rel="icon" type="image/jpeg" href="icons/dogday.jpg" />
   <link rel="stylesheet" href="css/style.css" />
 </head>
@@ -11,6 +11,10 @@
   <div id="kartApp">
     <!-- Fullscreen 3D Three.js WebGL Viewport -->
     <canvas id="webglCanvas"></canvas>
+
+    <!-- Fullscreen Visceral Crash & Sonic Boom Impact Overlays (100% Zero Text) -->
+    <div id="impactFlashOverlay" class="impact-flash-overlay"></div>
+    <div id="impactBadgeBurst" class="impact-badge-burst hidden">💥</div>
 
     <!-- Top Floating 3D Race Progress & Star HUD (100% Zero Text) -->
     <header class="race-topbar">
@@ -34,6 +38,9 @@
           </div>
           <div id="rivalMarker1" class="kart-marker rival-marker">
             <img id="rivalMarkerImg1" src="icons/craftycorn.jpg" alt="" />
+          </div>
+          <div id="rivalMarker2" class="kart-marker rival-marker">
+            <img id="rivalMarkerImg2" src="icons/hoppy.jpg" alt="" />
           </div>
           <!-- Player Marker -->
           <div id="playerMarker" class="kart-marker player-marker">
@@ -71,7 +78,7 @@
         <button id="btnLaneRight" class="arcade-pedal steer-pedal" aria-label="Right">➡️</button>
       </div>
 
-      <!-- Bottom-Right: Mario-Kart 3D Item Power-Up Pedals -->
+      <!-- Bottom-Right: Mario-Kart 3D Item Power-Up & Slam Pedals -->
       <div class="pedal-cluster right-pedals">
         <button id="btnItemTurbo" class="arcade-pedal item-turbo" aria-label="Turbo">🍄</button>
         <button id="btnItemShell" class="arcade-pedal item-shell" aria-label="Shell">🐢</button>
