@@ -247,9 +247,23 @@ function playShellSfx() {
   playTone(480, 'square', 0.14, 0.13, 920);
 }
 
-function playWinFanfare() {
-  [523.25, 659.25, 783.99, 1046.5, 1318.5].forEach((f, i) => {
+function playWinFanfare(starsEarned = 3) {
+  const notes =
+    starsEarned === 3
+      ? [523.25, 659.25, 783.99, 1046.5, 1318.5]
+      : starsEarned === 2
+        ? [523.25, 659.25, 783.99, 1046.5]
+        : [523.25, 659.25, 783.99];
+  notes.forEach((f, i) => {
     setTimeout(() => playTone(f, 'triangle', 0.25, 0.18, f * 1.05), i * 85);
+  });
+}
+
+function playLoseSadSfx() {
+  // Descending wah-wah-wah-waaah trombone loss sound
+  [392.0, 369.99, 349.23, 311.13].forEach((f, i) => {
+    const dur = i === 3 ? 0.48 : 0.22;
+    setTimeout(() => playTone(f, 'sawtooth', dur, 0.2, f * 0.86), i * 195);
   });
 }
 
@@ -563,7 +577,10 @@ let particles3D = [];
 let debrisChunks = [];
 let shockwaves3D = [];
 
-let checkpointStarsEarned = [false, false, false];
+let finishedRacerCount = 0;
+let playerFinishRank = 1;
+let playerLostRace = false;
+let lastLiveRank = 1;
 let raceFinished = false;
 let podiumOrbitAngle = 0;
 let steerGuideShown = true;
@@ -768,8 +785,12 @@ function buildRaceWorld(worldIdx) {
   debrisChunks = [];
   shockwaves3D = [];
 
-  checkpointStarsEarned = [false, false, false];
+  finishedRacerCount = 0;
+  playerFinishRank = 1;
+  playerLostRace = false;
+  lastLiveRank = 1;
   raceFinished = false;
+  clearTimeout(finishRace._modalTimer);
   podiumOrbitAngle = 0;
   hitStopTimer = 0;
   camTrauma = { shake: 0, rollKick: 0, pitchKick: 0, fovKick: 0, zoomKick: 0 };
@@ -863,7 +884,7 @@ function buildRaceWorld(worldIdx) {
     }
   }
 
-  // 3 Giant Checkpoint Star Gates at 28%, 58%, 84% of the Track
+  // 3 Giant Rainbow Arch Gates at 28%, 58%, 84% of the Track
   const checkpointRatios = [0.28, 0.58, 0.84];
   checkpointRatios.forEach((ratio, idx) => {
     const cpZ = -trackLen * ratio;
@@ -977,7 +998,7 @@ function buildRaceWorld(worldIdx) {
     });
   }
 
-  // Create Player 3D Smiling Critter Kart
+  // Create Player 3D Smiling Critter Kart (Center Lane 2 on the 5-Kart Starting Grid)
   playerKart = createKartMesh(cfg, true);
   playerState.laneIndex = 2;
   playerState.x = LANES[2];
@@ -996,15 +1017,26 @@ function buildRaceWorld(worldIdx) {
   playerState.turboTimer = 0;
   playerState.magnetTimer = 0;
   playerState.hitCooldown = 0;
+  playerState.finished = false;
+  playerState.finishOrder = 0;
   playerKart.root.position.set(0, 0, 0);
   dynamicGroup.add(playerKart.root);
 
-  // Create 3 Active 3D Rival Smiling Critter Karts with Full Bumper-Car & Flip Physics!
-  [1, 2, 3].forEach((offset, idx) => {
+  // Create 4 Active 3D Rival Smiling Critter Karts (5 Racers Total across all 5 lanes!)
+  // Speeds are calibrated so:
+  // - Rival 0 (25.45) is the Pace Leader: requires stars/ramps/boost or takedown to beat for 1st (3⭐)
+  // - Rival 1 (24.35) is the 2nd Contender
+  // - Rival 2 (23.25) is the 3rd Contender (Top 3 cutoff to pass!)
+  // - Rival 3 (22.15) is the 4th Contender
+  const rivalStartLanes = [1, 3, 0, 4];
+  const rivalStartZs = [-5, -3, -7, -2];
+  const rivalBaseSpeeds = [25.45, 24.35, 23.25, 22.15];
+
+  [1, 2, 3, 4].forEach((offset, idx) => {
     const rCfg = CRITTERS[(worldIdx + offset) % CRITTERS.length];
     const rKart = createKartMesh(rCfg, false);
-    const startLane = idx === 0 ? 1 : idx === 1 ? 3 : 0;
-    const startZ = -8 - idx * 6;
+    const startLane = rivalStartLanes[idx];
+    const startZ = rivalStartZs[idx];
     rKart.root.position.set(LANES[startLane], 0, startZ);
     dynamicGroup.add(rKart.root);
     rivals.push({
@@ -1019,11 +1051,13 @@ function buildRaceWorld(worldIdx) {
       knockVz: 0,
       roll: 0,
       tumbleX: 0,
-      baseSpeed: 22.0 + idx * 0.85,
+      baseSpeed: rivalBaseSpeeds[idx],
       spinTimer: 0,
       squash: 0,
       clashCooldown: 0,
-      laneSwitchTimer: 1.5 + idx * 0.7
+      laneSwitchTimer: 1.2 + idx * 0.55,
+      finished: false,
+      finishOrder: 0
     });
   });
 
@@ -1325,27 +1359,130 @@ function updateBoostPedalVisuals() {
   document.getElementById('btnJumpGlide').classList.toggle('active-boost', playerState.gliding);
 }
 
+function isWorldUnlocked(idx) {
+  if (idx <= 0) return true;
+  return (cupStars[idx - 1] || 0) >= 1 || (cupStars[idx] || 0) >= 1;
+}
+
 // UI Rendering (100% Zero-Text)
 function renderWorldSelector() {
   const rail = document.getElementById('worldSelectorRail');
   if (!rail) return;
   rail.innerHTML = '';
   CRITTERS.forEach((c, idx) => {
+    const unlocked = isWorldUnlocked(idx);
     const btn = document.createElement('button');
-    btn.className = 'world-pill' + (idx === currentWorld ? ' active' : '');
+    btn.className =
+      'world-pill' +
+      (idx === currentWorld ? ' active' : '') +
+      (unlocked ? '' : ' locked');
     const stars = cupStars[idx] || 0;
-    const starBadge = stars > 0 ? '⭐'.repeat(stars) : c.badge;
+    const starBadge = !unlocked ? '🔒' : stars > 0 ? '⭐'.repeat(stars) : c.badge;
     btn.innerHTML = `
       <img src="${c.icon}" alt="" />
       <span class="world-pill-stars">${starBadge}</span>
     `;
     btn.addEventListener('click', () => {
       ensureAudio();
+      if (!isWorldUnlocked(idx)) {
+        playTone(180, 'square', 0.12, 0.14, 110);
+        showRaceToast('🔒🥇🥈🥉');
+        return;
+      }
       document.getElementById('winModal').classList.add('hidden');
       buildRaceWorld(idx);
     });
     rail.appendChild(btn);
   });
+}
+
+// Rank-to-Stars & Rank-to-Medal Mapping:
+// - 1st Place (🥇): 3 Stars (⭐⭐⭐) — Pass!
+// - 2nd Place (🥈): 2 Stars (⭐⭐)  — Pass!
+// - 3rd Place (🥉): 1 Star  (⭐)   — Pass! (Top 3 required to pass!)
+// - 4th / 5th Place (😭): 0 Stars  — Lose! Must retry!
+function getStarsForRank(rank) {
+  if (rank === 1) return 3;
+  if (rank === 2) return 2;
+  if (rank === 3) return 1;
+  return 0;
+}
+
+function getMedalForRank(rank) {
+  if (rank === 1) return '🥇';
+  if (rank === 2) return '🥈';
+  if (rank === 3) return '🥉';
+  return '😭';
+}
+
+// Compute Exact 5-Racer Standings (1st through 5th)
+function computeStandings() {
+  const cfg = CRITTERS[currentWorld];
+  const entries = [
+    {
+      isPlayer: true,
+      id: cfg.id,
+      icon: cfg.icon,
+      badge: cfg.badge,
+      z: playerState.z,
+      finished: Boolean(playerState.finished),
+      finishOrder: playerState.finishOrder || 0
+    },
+    ...rivals.map((r, idx) => ({
+      isPlayer: false,
+      rivalIdx: idx,
+      id: r.cfg.id,
+      icon: r.cfg.icon,
+      badge: r.cfg.badge,
+      z: r.z,
+      finished: Boolean(r.finished),
+      finishOrder: r.finishOrder || 0
+    }))
+  ];
+
+  entries.sort((a, b) => {
+    if (a.finished && b.finished) {
+      return a.finishOrder - b.finishOrder;
+    }
+    if (a.finished !== b.finished) {
+      return a.finished ? -1 : 1;
+    }
+    // More negative z is further down the track toward -trackLength
+    return a.z - b.z;
+  });
+
+  return entries;
+}
+
+function updateLiveRankHud() {
+  const standings = computeStandings();
+  const currentRank = standings.findIndex((s) => s.isPlayer) + 1;
+  const projectedStars = getStarsForRank(currentRank);
+
+  const rankChip = document.getElementById('hudRankChip');
+  const rankEmoji = document.getElementById('hudRankEmoji');
+  if (rankChip && rankEmoji) {
+    rankEmoji.textContent = getMedalForRank(currentRank);
+    const rankClass =
+      currentRank === 1
+        ? 'rank-1'
+        : currentRank === 2
+          ? 'rank-2'
+          : currentRank === 3
+            ? 'rank-3'
+            : 'rank-lose';
+    rankChip.className = `hud-rank-chip ${rankClass}`;
+  }
+
+  for (let i = 0; i < 3; i++) {
+    const starEl = document.getElementById(`hudStar${i}`);
+    if (starEl) {
+      starEl.classList.toggle('earned', i < projectedStars);
+    }
+  }
+
+  lastLiveRank = currentRank;
+  return { standings, currentRank, projectedStars };
 }
 
 function updateHudDom() {
@@ -1359,40 +1496,112 @@ function updateHudDom() {
     if (imgEl) imgEl.src = r.cfg.icon;
   });
 
-  for (let i = 0; i < 3; i++) {
-    const earned = checkpointStarsEarned[i];
-    document.getElementById(`hudStar${i}`).classList.toggle('earned', earned);
-    document.getElementById(`cpStar${i}`).classList.toggle('collected', earned);
-  }
+  updateLiveRankHud();
 }
 
 function finishRace() {
   if (raceFinished) return;
   raceFinished = true;
-  checkpointStarsEarned = [true, true, true];
-  cupStars[currentWorld] = 3;
-  saveProgress();
-  updateHudDom();
-  renderWorldSelector();
-  playWinFanfare();
 
-  for (let i = 0; i < 5; i++) {
-    const col = RAINBOW_HEX[i % RAINBOW_HEX.length];
-    spawn3DBurst(
-      playerState.x + (i - 2) * 2.2,
-      3.2 + (i % 2) * 1.5,
-      playerState.z - 4,
-      col,
-      18
-    );
+  if (!playerState.finished) {
+    playerState.finished = true;
+    playerState.finishOrder = ++finishedRacerCount;
   }
 
-  setTimeout(() => {
+  const trackLen = CRITTERS[currentWorld].trackLength;
+  document.getElementById('trackProgressFill').style.width = '100%';
+  document.getElementById('playerMarker').style.left = '100%';
+  rivals.forEach((r, idx) => {
+    const rPct = r.finished ? 100 : Math.max(0, Math.min(100, (Math.abs(r.z) / trackLen) * 100));
+    const el = document.getElementById(`rivalMarker${idx}`);
+    if (el) el.style.left = `${rPct}%`;
+  });
+
+  const { standings, currentRank, projectedStars } = updateLiveRankHud();
+  playerFinishRank = currentRank;
+  const earnedStars = projectedStars; // 1st->3, 2nd->2, 3rd->1, 4th/5th->0
+  const passedLevel = playerFinishRank <= 3;
+  playerLostRace = !passedLevel;
+
+  if (passedLevel) {
+    cupStars[currentWorld] = Math.max(cupStars[currentWorld] || 0, earnedStars);
+    saveProgress();
+    renderWorldSelector();
+    playWinFanfare(earnedStars);
+
+    for (let i = 0; i < 5; i++) {
+      const col = RAINBOW_HEX[i % RAINBOW_HEX.length];
+      spawn3DBurst(
+        playerState.x + (i - 2) * 2.2,
+        3.2 + (i % 2) * 1.5,
+        playerState.z - 4,
+        col,
+        18
+      );
+    }
+  } else {
+    // Lost the race (finished 4th or 5th, outside Top 3!)
+    playerState.dizzyTimer = 99;
+    playLoseSadSfx();
+    showRaceToast('😭💔');
+    for (let s = 0; s < 6; s++) {
+      spawnSmokePuff3D(playerState.x, 0.7, playerState.z + 0.5, true);
+    }
+  }
+
+  clearTimeout(finishRace._modalTimer);
+  finishRace._modalTimer = setTimeout(() => {
     const cfg = CRITTERS[currentWorld];
+    const cardEl = document.getElementById('winPodiumCard');
+    const sparklesEl = document.getElementById('winSparklesHeader');
+    const medalEl = document.getElementById('winMedalBadge');
+    const starsEls = document.querySelectorAll('#winStarsRow .podium-star');
+    const standingsRowEl = document.getElementById('podiumStandingsRow');
+    const nextBtnEl = document.getElementById('btnWinNext');
+
+    if (cardEl) {
+      cardEl.classList.toggle('lose-card', !passedLevel);
+    }
+    if (sparklesEl) {
+      sparklesEl.textContent = passedLevel ? '🏁 🏆 🌈 🏆 🏁' : '🌧️ 💥 😭 💥 🌧️';
+    }
     document.getElementById('winDriverImg').src = cfg.icon;
     document.getElementById('winCupBadge').textContent = cfg.badge;
+    if (medalEl) {
+      medalEl.textContent = getMedalForRank(playerFinishRank);
+    }
+
+    starsEls.forEach((el, idx) => {
+      el.classList.toggle('earned', idx < earnedStars);
+    });
+
+    if (standingsRowEl) {
+      standingsRowEl.innerHTML = standings
+        .map((entry, idx) => {
+          const rankNum = idx + 1;
+          const isTop3 = rankNum <= 3;
+          const slotMedal = rankNum === 1 ? '🥇' : rankNum === 2 ? '🥈' : rankNum === 3 ? '🥉' : '💔';
+          const slotStars = getStarsForRank(rankNum);
+          const starsHtml = slotStars > 0 ? '⭐'.repeat(slotStars) : '❌';
+          return `
+            <div class="standing-slot ${isTop3 ? 'rank-top3' : 'rank-out'} ${entry.isPlayer ? 'is-player' : ''}">
+              ${entry.isPlayer ? '<span class="standing-you-crown">🏎️</span>' : ''}
+              <span class="standing-medal">${slotMedal}</span>
+              <img class="standing-avatar" src="${entry.icon}" alt="" />
+              <span class="standing-stars">${starsHtml}</span>
+            </div>
+          `;
+        })
+        .join('');
+    }
+
+    // Must finish in Top 3 (1st, 2nd, or 3rd) to unlock/advance to the next level!
+    if (nextBtnEl) {
+      nextBtnEl.classList.toggle('hidden', !passedLevel);
+    }
+
     document.getElementById('winModal').classList.remove('hidden');
-  }, 1150);
+  }, 1100);
 }
 
 // Main 3D Simulation Step
@@ -1484,7 +1693,13 @@ function updateGame3D(dt, timeSec) {
       playerState.z + Math.cos(podiumOrbitAngle) * camRadius
     );
     camera.lookAt(playerState.x, 1.2, playerState.z);
-    playerKart.driverGroup.rotation.y = Math.sin(timeSec * 5) * 0.35;
+    if (playerLostRace) {
+      playerKart.dizzyHalo.visible = true;
+      playerKart.dizzyHalo.rotation.y += dt * 9.5;
+      playerKart.driverGroup.rotation.z = Math.sin(timeSec * 4) * 0.25;
+    } else {
+      playerKart.driverGroup.rotation.y = Math.sin(timeSec * 5) * 0.35;
+    }
     return;
   }
 
@@ -1522,7 +1737,7 @@ function updateGame3D(dt, timeSec) {
   camTrauma.zoomKick = (camTrauma.zoomKick || 0) * Math.pow(0.03, dt);
 
   // Compute Forward Kart Speed + Knockback Rebound
-  const targetSpeed = playerState.turboTimer > 0 ? 37.5 : playerState.hitCooldown > 0 ? 14 : 25.0;
+  const targetSpeed = playerState.turboTimer > 0 ? 37.5 : playerState.hitCooldown > 0 ? 13.5 : 25.0;
   playerState.speed += (targetSpeed - playerState.speed) * Math.min(1, dt * 6.5);
   playerState.z -= (playerState.speed - playerState.knockVz) * dt;
 
@@ -1598,7 +1813,12 @@ function updateGame3D(dt, timeSec) {
     playerKart.gliderWings.scale.set(0.01, 1, 1);
   }
 
-  // Update 3 Active 3D Rival Karts & Check Kart-vs-Kart Collisions!
+  // Update 4 Active 3D Rival Karts with Genuine Race Progression (NO Fake Position Teleportation!)
+  const newlyCrossed = [];
+  if (!playerState.finished && playerState.z <= -trackLen) {
+    newlyCrossed.push(playerState);
+  }
+
   rivals.forEach((r) => {
     if (r.clashCooldown > 0) r.clashCooldown = Math.max(0, r.clashCooldown - dt);
     if (r.spinTimer > 0) r.spinTimer = Math.max(0, r.spinTimer - dt);
@@ -1608,25 +1828,60 @@ function updateGame3D(dt, timeSec) {
     r.squash *= Math.pow(0.015, dt);
     r.roll *= Math.pow(0.03, dt);
 
-    const rEffectiveSpeed = r.spinTimer > 0 ? r.baseSpeed * 0.52 : r.baseSpeed;
-    r.z -= (rEffectiveSpeed - r.knockVz) * dt;
+    let rEffectiveSpeed = 0;
+    if (r.finished) {
+      // Already crossed the finish line (-trackLen): coast smoothly into the finish paddock!
+      const parkZ = -trackLen - 6 - r.finishOrder * 3.5;
+      if (r.z > parkZ) {
+        rEffectiveSpeed = 12.0;
+        r.z -= rEffectiveSpeed * dt;
+      }
+    } else {
+      // Mild, realistic pace modulation (±10%) without ever teleporting r.z
+      const gapZ = r.z - playerState.z; // gapZ < 0 means rival is ahead of player
+      let paceFactor = 1.0;
+      if (gapZ < -36) paceFactor = 0.91;
+      else if (gapZ > 28) paceFactor = 1.1;
 
-    // Keep rivals near the action so bumper-car battles happen frequently
-    if (r.z < playerState.z - 28) {
-      r.z = playerState.z - 28;
-    } else if (r.z > playerState.z + 18) {
-      r.z = playerState.z + 18;
+      rEffectiveSpeed = (r.spinTimer > 0 ? r.baseSpeed * 0.45 : r.baseSpeed) * paceFactor;
+      r.z -= (rEffectiveSpeed - r.knockVz) * dt;
+
+      if (r.z <= -trackLen) {
+        newlyCrossed.push(r);
+      }
     }
 
     r.laneSwitchTimer -= dt;
-    if (r.laneSwitchTimer <= 0 && r.spinTimer <= 0) {
-      r.laneSwitchTimer = 1.8 + Math.random() * 1.8;
-      const step = Math.random() < 0.5 ? -1 : 1;
-      r.laneIndex = Math.max(0, Math.min(LANES.length - 1, r.laneIndex + step));
+    if (!r.finished && r.laneSwitchTimer <= 0 && r.spinTimer <= 0) {
+      r.laneSwitchTimer = 1.4 + Math.random() * 1.4;
+      // Check if an obstacle is directly ahead in the rival's lane and try to dodge it
+      const obstacleAhead = obstacles.some(
+        (obs) => !obs.hit && obs.z < r.z && r.z - obs.z < 14 && Math.abs(obs.x - LANES[r.laneIndex]) < 1.1
+      );
+      if (obstacleAhead || Math.random() < 0.65) {
+        const step = Math.random() < 0.5 ? -1 : 1;
+        const candidateLane = Math.max(0, Math.min(LANES.length - 1, r.laneIndex + step));
+        r.laneIndex = candidateLane;
+      }
     }
 
     r.x += (LANES[r.laneIndex] - r.x) * Math.min(1, dt * 6.5) + r.knockVx * dt;
     r.x = Math.max(-7.2, Math.min(7.2, r.x));
+  });
+
+  // Resolve exact sub-frame photo-finish ordering for any racers crossing z <= -trackLen this frame
+  if (newlyCrossed.length > 0) {
+    newlyCrossed.sort((a, b) => a.z - b.z);
+    newlyCrossed.forEach((racer) => {
+      if (!racer.finished) {
+        racer.finished = true;
+        racer.finishOrder = ++finishedRacerCount;
+      }
+    });
+  }
+
+  rivals.forEach((r) => {
+    const rEffectiveSpeed = r.finished ? 10 : r.baseSpeed;
 
     // Vertical airborne tumble physics for rival karts when rammed or shelled!
     if (r.y > 0 || r.vy !== 0) {
@@ -1665,6 +1920,7 @@ function updateGame3D(dt, timeSec) {
 
     // Check 3D Kart-vs-Kart Collision with Player!
     if (
+      !r.finished &&
       r.clashCooldown <= 0 &&
       Math.abs(r.z - playerState.z) < 2.55 &&
       Math.abs(r.x - playerState.x) < 1.85 &&
@@ -1696,7 +1952,7 @@ function updateGame3D(dt, timeSec) {
 
     // Catapult rival karts in path
     rivals.forEach((r) => {
-      if (Math.abs(r.z - sh.z) < 2.8 && Math.abs(r.x - sh.x) < 2.5 && r.spinTimer <= 0) {
+      if (!r.finished && Math.abs(r.z - sh.z) < 2.8 && Math.abs(r.x - sh.x) < 2.5 && r.spinTimer <= 0) {
         r.vy = 13.5;
         r.knockVz = -24;
         r.tumbleX = Math.PI * 4;
@@ -1715,14 +1971,14 @@ function updateGame3D(dt, timeSec) {
     }
   }
 
-  // Update 3D Spinning Stars & Checkpoint Stars
+  // Update 3D Spinning Stars (Collecting stars grants a mini speed surge to help overtake rivals!)
   trackStars.forEach((st) => {
     if (st.collected) return;
     st.mesh.rotation.y += dt * 3.0;
 
     const distZ = Math.abs(st.z - playerState.z);
     const pullRadius =
-      playerState.magnetTimer > 0 ? 18 : st.checkpointIdx >= 0 ? 9.5 : 2.3;
+      playerState.magnetTimer > 0 ? 18 : st.checkpointIdx >= 0 ? 6.5 : 2.3;
 
     if (distZ < pullRadius && Math.abs(st.x - playerState.x) < pullRadius) {
       st.x += (playerState.x - st.x) * Math.min(1, dt * 11);
@@ -1738,12 +1994,12 @@ function updateGame3D(dt, timeSec) {
     ) {
       st.collected = true;
       st.mesh.visible = false;
+      // Mini speed surge from collecting track stars!
+      playerState.speed = Math.min(35.0, playerState.speed + (st.checkpointIdx >= 0 ? 4.5 : 2.2));
       playStarSfx();
       spawn3DBurst(playerState.x, playerState.y + 1.2, playerState.z, 0xffd54f, 10);
       if (st.checkpointIdx >= 0) {
-        checkpointStarsEarned[st.checkpointIdx] = true;
-        updateHudDom();
-        showRaceToast('⭐🏆✨');
+        showRaceToast('⭐⚡✨');
       }
     }
   });
@@ -1765,7 +2021,7 @@ function updateGame3D(dt, timeSec) {
     }
   });
 
-  // Update 3D Launch Ramps (launch into air without auto-invincibility so normal crashes stay physical!)
+  // Update 3D Launch Ramps (launch into air + aerial speed surge without auto-invincibility!)
   boostPads.forEach((bp) => {
     if (
       !bp.triggered &&
@@ -1773,6 +2029,7 @@ function updateGame3D(dt, timeSec) {
       Math.abs(bp.x - playerState.x) < 1.8
     ) {
       bp.triggered = true;
+      playerState.speed = Math.max(playerState.speed, 31.5);
       triggerJumpGlide();
     }
   });
@@ -1814,18 +2071,20 @@ function updateGame3D(dt, timeSec) {
   dirLight.target.position.set(playerState.x, 0, playerState.z - 10);
   dirLight.target.updateMatrixWorld();
 
-  // Update Top Race Progress Bar Markers
+  // Update Top Race Progress Bar Markers & Live Rank HUD
   const progressPct = Math.max(0, Math.min(100, (Math.abs(playerState.z) / trackLen) * 100));
   document.getElementById('trackProgressFill').style.width = `${progressPct}%`;
   document.getElementById('playerMarker').style.left = `${progressPct}%`;
 
   rivals.forEach((r, idx) => {
-    const rPct = Math.max(0, Math.min(100, (Math.abs(r.z) / trackLen) * 100));
+    const rPct = r.finished ? 100 : Math.max(0, Math.min(100, (Math.abs(r.z) / trackLen) * 100));
     const el = document.getElementById(`rivalMarker${idx}`);
     if (el) el.style.left = `${rPct}%`;
   });
 
-  if (Math.abs(playerState.z) >= trackLen) {
+  updateLiveRankHud();
+
+  if (playerState.z <= -trackLen) {
     finishRace();
   }
 }
@@ -1908,20 +2167,22 @@ document.getElementById('btnWinReplay').addEventListener('click', () => {
 });
 
 document.getElementById('btnWinNext').addEventListener('click', () => {
+  if (playerLostRace) return; // Cannot advance if outside Top 3!
   document.getElementById('winModal').classList.add('hidden');
   if (currentWorld < CRITTERS.length - 1) {
     buildRaceWorld(currentWorld + 1);
   } else {
     const grid = document.getElementById('finaleGrid');
     if (grid) {
-      grid.innerHTML = CRITTERS.map(
-        (c) => `
+      grid.innerHTML = CRITTERS.map((c, idx) => {
+        const stars = Math.max(1, cupStars[idx] || 1);
+        return `
         <div class="finale-tile">
           <img src="${c.icon}" alt="" />
-          <span>⭐⭐⭐ ${c.badge}</span>
+          <span>${'⭐'.repeat(stars)} ${c.badge}</span>
         </div>
-      `
-      ).join('');
+      `;
+      }).join('');
     }
     document.getElementById('finaleModal').classList.remove('hidden');
   }

@@ -28,11 +28,8 @@
       <div class="track-progress-shell">
         <div class="track-progress-rail">
           <div id="trackProgressFill" class="track-progress-fill"></div>
-          <span class="track-checkpoint cp-1" id="cpStar0">⭐</span>
-          <span class="track-checkpoint cp-2" id="cpStar1">⭐</span>
-          <span class="track-checkpoint cp-3" id="cpStar2">⭐</span>
           <span class="track-finish-flag">🏁</span>
-          <!-- Rival Markers -->
+          <!-- 4 Rival Markers -->
           <div id="rivalMarker0" class="kart-marker rival-marker">
             <img id="rivalMarkerImg0" src="icons/catnap.jpg" alt="" />
           </div>
@@ -42,6 +39,9 @@
           <div id="rivalMarker2" class="kart-marker rival-marker">
             <img id="rivalMarkerImg2" src="icons/hoppy.jpg" alt="" />
           </div>
+          <div id="rivalMarker3" class="kart-marker rival-marker">
+            <img id="rivalMarkerImg3" src="icons/picky.jpg" alt="" />
+          </div>
           <!-- Player Marker -->
           <div id="playerMarker" class="kart-marker player-marker">
             <img id="playerMarkerImg" src="icons/dogday.jpg" alt="" />
@@ -50,12 +50,15 @@
         </div>
       </div>
 
-      <!-- 3 Giant Collected Star Trophies + Sound + Replay -->
+      <!-- Live Rank Medal + 3 Star Trophies + Sound + Replay -->
       <div class="top-right-cluster">
+        <div id="hudRankChip" class="hud-rank-chip rank-1">
+          <span id="hudRankEmoji">🥇</span>
+        </div>
         <div class="star-trophy-row">
-          <div id="hudStar0" class="star-medal">⭐</div>
-          <div id="hudStar1" class="star-medal">⭐</div>
-          <div id="hudStar2" class="star-medal">⭐</div>
+          <div id="hudStar0" class="star-medal earned">⭐</div>
+          <div id="hudStar1" class="star-medal earned">⭐</div>
+          <div id="hudStar2" class="star-medal earned">⭐</div>
         </div>
         <button id="btnRestartRace" class="glass-icon-btn" aria-label="Replay">🔁</button>
         <button id="btnSoundToggle" class="glass-icon-btn" aria-label="Sound">🔊</button>
@@ -86,20 +89,22 @@
       </div>
     </footer>
 
-    <!-- 100% Zero-Text 3D Podium Trophy Celebration Modal -->
+    <!-- 100% Zero-Text 3D Podium Ranking & Win/Lose Celebration Modal -->
     <div id="winModal" class="podium-backdrop hidden" role="dialog" aria-modal="true">
-      <div class="podium-card">
-        <div class="podium-sparkles">🏁 🏆 🌈 🏆 🏁</div>
+      <div id="winPodiumCard" class="podium-card">
+        <div id="winSparklesHeader" class="podium-sparkles">🏁 🏆 🌈 🏆 🏁</div>
         <div class="podium-hero">
           <img id="winDriverImg" src="icons/dogday.jpg" alt="" />
           <span id="winCupBadge" class="podium-cup-badge">☀️</span>
-          <span class="podium-medal-badge">🥇</span>
+          <span id="winMedalBadge" class="podium-medal-badge">🥇</span>
         </div>
         <div class="podium-stars" id="winStarsRow">
           <div class="podium-star earned">⭐</div>
           <div class="podium-star earned">⭐</div>
           <div class="podium-star earned">⭐</div>
         </div>
+        <!-- 5-Racer Full Finishing Order Standings -->
+        <div id="podiumStandingsRow" class="podium-standings-row"></div>
         <div class="podium-actions">
           <button id="btnWinReplay" class="podium-btn replay">🔁</button>
           <button id="btnWinNext" class="podium-btn next">▶️</button>
